@@ -15,11 +15,20 @@ limitations under the License.
 */
 package engine
 
+type InterfaceMetadata struct {
+	PackageName   string
+	PackagePath   string
+	InterfaceName string
+}
+
 type ComponentMetadata struct {
-	Name        string
-	Package     string
-	Constructor string
-	Primary     bool
+	PackageName     string
+	PackagePath     string
+	StructName      string
+	ConstructorName string
+	IsPrimary       bool
+	Scope           string
+	Implements      []InterfaceMetadata
 }
 
 type Generator interface {

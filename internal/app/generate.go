@@ -14,3 +14,43 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 package app
+
+import (
+	"log/slog"
+
+	"github.com/soner3/weld/internal/engine/wiregen"
+	"github.com/soner3/weld/internal/scanner"
+)
+
+func RunGenerate(dir string) error {
+	log := slog.With("pkg", "app")
+
+	log.Info("Starting weld generation...", "dir", dir)
+
+	log.Debug("Scanning packages for weld components...")
+	pkgs, err := scanner.ScanPackages(dir)
+	if err != nil {
+		return err
+	}
+
+	components, err := scanner.ParseComponents(pkgs)
+	if err != nil {
+		return err
+	}
+
+	if len(components) == 0 {
+		log.Warn("No weld components found. Nothing to generate.")
+		return nil
+	}
+
+	log.Info("Scan complete", "components_found", len(components))
+
+	log.Debug("Generating DI container...")
+	gen := wiregen.New()
+	if err := gen.Generate(dir, components); err != nil {
+		return err
+	}
+
+	log.Info("Successfully generated weld container!")
+	return nil
+}

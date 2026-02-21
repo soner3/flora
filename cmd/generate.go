@@ -19,6 +19,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/soner3/weld/internal/app"
 	"github.com/soner3/weld/internal/errs"
 	"github.com/spf13/cobra"
 )
@@ -32,18 +33,21 @@ var generateCmd = &cobra.Command{
 	Short:        "Generate weld files",
 	Long:         `Generate weld files from the given directory.`,
 	SilenceUsage: true,
-	PreRunE: func(cmd *cobra.Command, args []string) error {
-		slog.Debug("Validating flag 'dir'", "dir", dir)
 
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		log := slog.With("pkg", "cmd")
+
+		log.Debug("Validating flag", "flag", "dir", "value", dir)
 		if _, err := os.Stat(dir); err != nil {
 			return errs.Wrap(err, "invalid directory provided for flag 'dir': %s", dir)
 		}
 
-		slog.Debug("Flag 'dir' is valid", "dir", dir)
+		log.Debug("Flag is valid", "flag", "dir")
 		return nil
 	},
+
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return nil
+		return app.RunGenerate(dir)
 	},
 }
 
