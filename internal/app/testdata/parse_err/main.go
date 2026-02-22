@@ -15,6 +15,6 @@ limitations under the License.
 */
 package parseerr
 
-import "github.com/soner3/mint"
+import "github.com/soner3/flora"
 
-type Bad struct{ mint.Component }
+type Bad struct{ flora.Component }

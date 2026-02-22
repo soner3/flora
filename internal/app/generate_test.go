@@ -64,7 +64,7 @@ func TestRunGenerate(t *testing.T) {
 			outDir := tc.outDir
 
 			if outDir == "" {
-				tmpDir, err := os.MkdirTemp(".", "mint_app_test_*")
+				tmpDir, err := os.MkdirTemp(".", "flora_app_test_*")
 				if err != nil {
 					t.Fatal(err)
 				}

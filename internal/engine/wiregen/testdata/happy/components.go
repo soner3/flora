@@ -15,14 +15,14 @@ limitations under the License.
 */
 package happy
 
-import "github.com/soner3/mint"
+import "github.com/soner3/flora"
 
 type Greeter interface {
 	Greet() string
 }
 
 type SimpleLogger struct {
-	mint.Component
+	flora.Component
 }
 
 func NewSimpleLogger() SimpleLogger {
@@ -30,7 +30,7 @@ func NewSimpleLogger() SimpleLogger {
 }
 
 type GermanGreeter struct {
-	mint.Component `mint:"constructor=BuildGermanGreeter,"`
+	flora.Component `flora:"constructor=BuildGermanGreeter,"`
 }
 
 func BuildGermanGreeter() *GermanGreeter {
@@ -42,7 +42,7 @@ func (g *GermanGreeter) Greet() string {
 }
 
 type App struct {
-	mint.Component
+	flora.Component
 }
 
 func NewApp(g Greeter, l SimpleLogger) *App {
@@ -55,7 +55,7 @@ type JustANormalStruct struct {
 }
 
 type UntaggedComponent struct {
-	mint.Component
+	flora.Component
 }
 
 func NewUntaggedComponent() *UntaggedComponent {

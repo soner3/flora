@@ -15,10 +15,10 @@ limitations under the License.
 */
 package errnotfunc
 
-import "github.com/soner3/mint"
+import "github.com/soner3/flora"
 
 type BadComponent struct {
-	mint.Component
+	flora.Component
 }
 
 var NewBadComponent = "not a function"

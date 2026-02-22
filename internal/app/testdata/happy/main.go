@@ -15,8 +15,8 @@ limitations under the License.
 */
 package happy
 
-import "github.com/soner3/mint"
+import "github.com/soner3/flora"
 
-type App struct{ mint.Component }
+type App struct{ flora.Component }
 
 func NewApp() *App { return nil }

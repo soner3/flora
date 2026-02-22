@@ -22,7 +22,7 @@ import (
 	"time"
 )
 
-type MintError struct {
+type FloraError struct {
 	ID         uint64
 	Inner      error
 	Message    string
@@ -31,14 +31,14 @@ type MintError struct {
 	Misc       map[string]any
 }
 
-func Wrap(err error, message string, args ...any) *MintError {
+func Wrap(err error, message string, args ...any) *FloraError {
 	formattedMsg := message
 	if len(args) > 0 {
 		formattedMsg = fmt.Sprintf(message, args...)
 	}
 
-	if e, ok := err.(*MintError); ok {
-		return &MintError{
+	if e, ok := err.(*FloraError); ok {
+		return &FloraError{
 			Inner:      err,
 			Message:    formattedMsg,
 			StackTrace: e.StackTrace,
@@ -50,7 +50,7 @@ func Wrap(err error, message string, args ...any) *MintError {
 
 	trace := debug.Stack()
 
-	return &MintError{
+	return &FloraError{
 		Inner:      err,
 		Message:    formattedMsg,
 		StackTrace: string(trace),
@@ -60,14 +60,14 @@ func Wrap(err error, message string, args ...any) *MintError {
 	}
 }
 
-func (e *MintError) Error() string {
+func (e *FloraError) Error() string {
 	if e.Inner != nil {
 		return fmt.Sprintf("%s: %v", e.Message, e.Inner)
 	}
 	return e.Message
 }
 
-func (e *MintError) Unwrap() error {
+func (e *FloraError) Unwrap() error {
 	return e.Inner
 }
 

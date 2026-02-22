@@ -1,11 +1,11 @@
 package config
 
-import "github.com/soner3/mint"
+import "github.com/soner3/flora"
 
 type Config struct {
-	mint.Component `mint:"constructor=NewConfig"`
-	Port           int
-	Host           string
+	flora.Component `flora:"constructor=NewConfig"`
+	Port            int
+	Host            string
 }
 
 func NewConfig() Config {

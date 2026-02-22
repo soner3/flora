@@ -15,10 +15,10 @@ limitations under the License.
 */
 package errnoimpl
 
-import "github.com/soner3/mint"
+import "github.com/soner3/flora"
 
 type Iface interface{ Do() }
 
-type Consumer struct{ mint.Component }
+type Consumer struct{ flora.Component }
 
 func NewConsumer(i Iface) *Consumer { return nil }

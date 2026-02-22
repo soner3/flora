@@ -16,13 +16,13 @@ limitations under the License.
 package postgres
 
 import (
-	"github.com/soner3/mint"
-	"github.com/soner3/mint/example/config"
+	"github.com/soner3/flora"
+	"github.com/soner3/flora/example/config"
 )
 
 type PostgresRepository struct {
-	mint.Component `mint:"primary"`
-	cfg            config.Config
+	flora.Component `flora:"primary"`
+	cfg             config.Config
 }
 
 func NewPostgresRepository(cfg config.Config) *PostgresRepository {

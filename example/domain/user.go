@@ -18,8 +18,8 @@ package domain
 import (
 	"fmt"
 
-	"github.com/soner3/mint"
-	"github.com/soner3/mint/example/config"
+	"github.com/soner3/flora"
+	"github.com/soner3/flora/example/config"
 )
 
 type UserRepository interface {
@@ -27,9 +27,9 @@ type UserRepository interface {
 }
 
 type UserService struct {
-	mint.Component `mint:"constructor=BuildUserService"`
-	repo           UserRepository
-	cfg            config.Config
+	flora.Component `flora:"constructor=BuildUserService"`
+	repo            UserRepository
+	cfg             config.Config
 }
 
 func BuildUserService(repo UserRepository, cfg config.Config) *UserService {

@@ -1,4 +1,4 @@
-module github.com/soner3/mint
+module github.com/soner3/flora
 
 go 1.25.0
 

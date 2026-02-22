@@ -15,30 +15,30 @@ limitations under the License.
 */
 package happy
 
-import "github.com/soner3/mint"
+import "github.com/soner3/flora"
 
 type Iface interface{ Do() }
 
 type A struct {
-	mint.Component `mint:""`
+	flora.Component `flora:""`
 }
 
 func NewA() *A { return nil }
 
 type B struct {
-	mint.Component `mint:"primary,scope=prototype,constructor=BuildB"`
+	flora.Component `flora:"primary,scope=prototype,constructor=BuildB"`
 }
 
 func BuildB() *B { return nil }
 func (b *B) Do() {}
 
 type C struct {
-	mint.Component `mint:"NewC"`
+	flora.Component `flora:"NewC"`
 }
 
 func NewC() *C   { return nil }
 func (c *C) Do() {}
 
-type Consumer struct{ mint.Component }
+type Consumer struct{ flora.Component }
 
 func NewConsumer(i Iface) *Consumer { return nil }

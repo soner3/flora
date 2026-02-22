@@ -22,8 +22,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/soner3/mint/internal/engine"
-	"github.com/soner3/mint/internal/scanner"
+	"github.com/soner3/flora/internal/engine"
+	"github.com/soner3/flora/internal/scanner"
 )
 
 func TestGenerate(t *testing.T) {
@@ -49,7 +49,7 @@ func TestGenerate(t *testing.T) {
 		{
 			name: "TestGenerateSuccessfully",
 			setupDir: func(t *testing.T) string {
-				tmpDir, err := os.MkdirTemp(".", "mint_test_out_*")
+				tmpDir, err := os.MkdirTemp(".", "flora_test_out_*")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -116,7 +116,7 @@ func TestGenerate(t *testing.T) {
 		{
 			name: "TestWireExecutionFailed",
 			setupDir: func(t *testing.T) string {
-				tmpDir, err := os.MkdirTemp(".", "mint_test_out_*")
+				tmpDir, err := os.MkdirTemp(".", "flora_test_out_*")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -125,7 +125,7 @@ func TestGenerate(t *testing.T) {
 			components: []*engine.ComponentMetadata{
 				{
 					PackageName:     "happy",
-					PackagePath:     "github.com/soner3/mint/internal/engine/wiregen/testdata/happy",
+					PackagePath:     "github.com/soner3/flora/internal/engine/wiregen/testdata/happy",
 					StructName:      "GhostComponent",
 					ConstructorName: "NewGhostComponent",
 					IsPointer:       true,
@@ -140,7 +140,7 @@ func TestGenerate(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				tempDir, err := os.MkdirTemp("", "mint_del_*")
+				tempDir, err := os.MkdirTemp("", "flora_del_*")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -164,7 +164,7 @@ func TestGenerate(t *testing.T) {
 		{
 			name: "TestReadExistingPackageName",
 			setupDir: func(t *testing.T) string {
-				tmpDir, err := os.MkdirTemp(".", "mint_test_out_*")
+				tmpDir, err := os.MkdirTemp(".", "flora_test_out_*")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -190,7 +190,7 @@ func TestGenerate(t *testing.T) {
 		{
 			name: "TestParseTemplateFailed",
 			setupDir: func(t *testing.T) string {
-				tmpDir, _ := os.MkdirTemp(".", "mint_test_out_*")
+				tmpDir, _ := os.MkdirTemp(".", "flora_test_out_*")
 
 				originalTmpl := wireTemplate
 				wireTemplate = "{{ unclosed"
@@ -208,7 +208,7 @@ func TestGenerate(t *testing.T) {
 		{
 			name: "TestExecuteTemplateFailed",
 			setupDir: func(t *testing.T) string {
-				tmpDir, _ := os.MkdirTemp(".", "mint_test_out_*")
+				tmpDir, _ := os.MkdirTemp(".", "flora_test_out_*")
 
 				originalTmpl := wireTemplate
 				wireTemplate = `{{template "ghost_template"}}`
@@ -226,9 +226,9 @@ func TestGenerate(t *testing.T) {
 		{
 			name: "TestWriteTempFileFailed",
 			setupDir: func(t *testing.T) string {
-				tmpDir, _ := os.MkdirTemp(".", "mint_test_out_*")
+				tmpDir, _ := os.MkdirTemp(".", "flora_test_out_*")
 
-				os.Mkdir(filepath.Join(tmpDir, "mint_injector.go"), 0755)
+				os.Mkdir(filepath.Join(tmpDir, "flora_injector.go"), 0755)
 
 				return tmpDir
 			},
@@ -250,12 +250,12 @@ func TestGenerate(t *testing.T) {
 		{
 			name: "TestRenameGeneratedFileFailed",
 			setupDir: func(t *testing.T) string {
-				tmpDir, err := os.MkdirTemp(".", "mint_test_out_*")
+				tmpDir, err := os.MkdirTemp(".", "flora_test_out_*")
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				blockerPath := filepath.Join(tmpDir, "mint_container.go")
+				blockerPath := filepath.Join(tmpDir, "flora_container.go")
 				if err := os.Mkdir(blockerPath, 0755); err != nil {
 					t.Fatal(err)
 				}
@@ -272,7 +272,7 @@ func TestGenerate(t *testing.T) {
 
 			outDir := tc.setupDir(t)
 
-			if strings.HasPrefix(filepath.Base(outDir), "mint_test_out_") {
+			if strings.HasPrefix(filepath.Base(outDir), "flora_test_out_") {
 				defer os.RemoveAll(outDir)
 			}
 

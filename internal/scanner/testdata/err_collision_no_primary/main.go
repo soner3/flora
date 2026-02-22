@@ -15,27 +15,27 @@ limitations under the License.
 */
 package errcollisionnoprimary
 
-import "github.com/soner3/mint"
+import "github.com/soner3/flora"
 
 type Greeter interface {
 	Greet()
 }
 type GreeterA struct {
-	mint.Component
+	flora.Component
 }
 
 func NewGreeterA() *GreeterA { return nil }
 func (g *GreeterA) Greet()   {}
 
 type GreeterB struct {
-	mint.Component
+	flora.Component
 }
 
 func NewGreeterB() *GreeterB { return nil }
 func (g *GreeterB) Greet()   {}
 
 type Consumer struct {
-	mint.Component
+	flora.Component
 }
 
 func NewConsumer(g Greeter) *Consumer { return nil }

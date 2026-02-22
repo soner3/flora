@@ -18,16 +18,16 @@ package app
 import (
 	"log/slog"
 
-	"github.com/soner3/mint/internal/engine/wiregen"
-	"github.com/soner3/mint/internal/scanner"
+	"github.com/soner3/flora/internal/engine/wiregen"
+	"github.com/soner3/flora/internal/scanner"
 )
 
 func RunGenerate(dir, outDir string) error {
 	log := slog.With("pkg", "app")
 
-	log.Info("Starting mint generation...", "dir", dir, "out", outDir)
+	log.Info("Starting flora generation...", "dir", dir, "out", outDir)
 
-	log.Debug("Scanning packages for mint components...")
+	log.Debug("Scanning packages for flora components...")
 	pkgs, err := scanner.ScanPackages(dir)
 	if err != nil {
 		return err
@@ -39,7 +39,7 @@ func RunGenerate(dir, outDir string) error {
 	}
 
 	if len(components) == 0 {
-		log.Warn("No mint components found. Nothing to generate.")
+		log.Warn("No flora components found. Nothing to generate.")
 		return nil
 	}
 
@@ -51,6 +51,6 @@ func RunGenerate(dir, outDir string) error {
 		return err
 	}
 
-	log.Info("Successfully generated mint container!")
+	log.Info("Successfully generated flora container!")
 	return nil
 }

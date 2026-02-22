@@ -16,12 +16,12 @@ limitations under the License.
 package mysql
 
 import (
-	"github.com/soner3/mint"
-	"github.com/soner3/mint/example/config"
+	"github.com/soner3/flora"
+	"github.com/soner3/flora/example/config"
 )
 
 type MysqlRepository struct {
-	mint.Component
+	flora.Component
 	cfg config.Config
 }
 

@@ -15,7 +15,7 @@ limitations under the License.
 */
 package main
 
-import "github.com/soner3/mint/cmd"
+import "github.com/soner3/flora/cmd"
 
 func main() {
 	cmd.Execute()

@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/soner3/mint/internal/errs"
+	"github.com/soner3/flora/internal/errs"
 	"golang.org/x/tools/go/packages"
 )
 
