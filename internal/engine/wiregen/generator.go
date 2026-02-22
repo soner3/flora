@@ -17,10 +17,12 @@ package wiregen
 
 import (
 	"bytes"
+	"go/build"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"text/template"
 
 	"github.com/soner3/weld/internal/engine"
@@ -48,11 +50,7 @@ import (
 // WeldContainer holds all configured dependencies.
 type WeldContainer struct {
 	{{range .Providers}}
-	{{if .IsPointer}}
-	{{.StructName}} *{{.PackageName}}.{{.StructName}}
-	{{else}}
-	{{.StructName}} {{.PackageName}}.{{.StructName}}
-	{{end}}
+	{{.StructName}} {{if .IsPointer}}*{{end}}{{.PackagePrefix}}{{.StructName}}
 	{{end}}
 }
 
@@ -61,12 +59,12 @@ func InitializeContainer() (*WeldContainer, error) {
 	wire.Build(
 		// 1. Alle Provider (Konstruktoren)
 		{{range .Providers}}
-		{{.PackageName}}.{{.ConstructorName}},
+		{{.PackagePrefix}}{{.ConstructorName}},
 		{{end}}
 		
 		// 2. Alle Interfaces an die passenden Structs binden
 		{{range .Bindings}}
-		wire.Bind(new({{.InterfacePkg}}.{{.InterfaceName}}), new({{if .IsPointer}}*{{end}}{{.ComponentPkg}}.{{.StructName}})),
+		wire.Bind(new({{.InterfacePrefix}}{{.InterfaceName}}), new({{if .IsPointer}}*{{end}}{{.ComponentPrefix}}{{.StructName}})),
 		{{end}}
 
 		// 3. Den Container selbst zusammenbauen
@@ -76,22 +74,29 @@ func InitializeContainer() (*WeldContainer, error) {
 }
 `
 
-type templateData struct {
-	PackageName string
-	Imports     []string
-	Providers   []*engine.ComponentMetadata
-	Bindings    []bindingData
+type providerData struct {
+	StructName      string
+	PackagePrefix   string
+	ConstructorName string
+	IsPointer       bool
 }
 
 type bindingData struct {
-	InterfacePkg  string
-	InterfaceName string
-	ComponentPkg  string
-	StructName    string
-	IsPointer     bool
+	InterfacePrefix string
+	InterfaceName   string
+	ComponentPrefix string
+	StructName      string
+	IsPointer       bool
 }
 
-func (g *WireGenerator) Generate(targetDir string, components []*engine.ComponentMetadata) error {
+type templateData struct {
+	PackageName string
+	Imports     []string
+	Providers   []providerData
+	Bindings    []bindingData
+}
+
+func (g *WireGenerator) Generate(outDir string, components []*engine.ComponentMetadata) error {
 	log := slog.With("pkg", "wiregen")
 
 	if len(components) == 0 {
@@ -99,32 +104,70 @@ func (g *WireGenerator) Generate(targetDir string, components []*engine.Componen
 		return nil
 	}
 
-	weldPkgDir := filepath.Join(targetDir, "weld")
-	if err := os.MkdirAll(weldPkgDir, os.ModePerm); err != nil {
-		return errs.Wrap(err, "failed to create weld package directory")
+	absOutDir, err := filepath.Abs(outDir)
+	if err != nil {
+		return errs.Wrap(err, "failed to resolve absolute output directory")
+	}
+
+	if err := os.MkdirAll(absOutDir, os.ModePerm); err != nil {
+		return errs.Wrap(err, "failed to create output directory")
+	}
+
+	pkgName := filepath.Base(absOutDir)
+	pkgName = strings.ReplaceAll(pkgName, "-", "_")
+
+	if buildPkg, err := build.Default.ImportDir(absOutDir, 0); err == nil {
+		pkgName = buildPkg.Name
+	} else if pkgName == "." || pkgName == "/" {
+		pkgName = "main"
 	}
 
 	data := templateData{
-		PackageName: "weld",
-		Providers:   components,
+		PackageName: pkgName,
 	}
 
+	var providers []providerData
 	importSet := make(map[string]bool)
 	var bindings []bindingData
 
 	for _, comp := range components {
-		importSet[comp.PackagePath] = true
+		compPrefix := ""
+		if comp.PackageName != pkgName {
+			if comp.PackageName == "main" {
+				return errs.Wrap(nil, "cannot generate container in package '%s' because component '%s' belongs to package 'main' (Go forbids importing main). Change output dir (-o) to your main directory or move the component.", pkgName, comp.StructName)
+			}
+			compPrefix = comp.PackageName + "."
+			importSet[comp.PackagePath] = true
+		}
+
+		providers = append(providers, providerData{
+			StructName:      comp.StructName,
+			PackagePrefix:   compPrefix,
+			ConstructorName: comp.ConstructorName,
+			IsPointer:       comp.IsPointer,
+		})
+
 		for _, iface := range comp.Implements {
-			importSet[iface.PackagePath] = true
+			ifacePrefix := ""
+			if iface.PackageName != pkgName {
+				if iface.PackageName == "main" {
+					return errs.Wrap(nil, "cannot generate container in package '%s' because interface '%s' belongs to package 'main'. Change output dir (-o) to your main directory or move the interface.", pkgName, iface.InterfaceName)
+				}
+				ifacePrefix = iface.PackageName + "."
+				importSet[iface.PackagePath] = true
+			}
+
 			bindings = append(bindings, bindingData{
-				InterfacePkg:  iface.PackageName,
-				InterfaceName: iface.InterfaceName,
-				ComponentPkg:  comp.PackageName,
-				StructName:    comp.StructName,
-				IsPointer:     comp.IsPointer,
+				InterfacePrefix: ifacePrefix,
+				InterfaceName:   iface.InterfaceName,
+				ComponentPrefix: compPrefix,
+				StructName:      comp.StructName,
+				IsPointer:       comp.IsPointer,
 			})
 		}
 	}
+
+	data.Providers = providers
 
 	for imp := range importSet {
 		data.Imports = append(data.Imports, imp)
@@ -136,7 +179,7 @@ func (g *WireGenerator) Generate(targetDir string, components []*engine.Componen
 		return errs.Wrap(err, "failed to parse wire template")
 	}
 
-	tempFilePath := filepath.Join(weldPkgDir, "weld_injector.go")
+	tempFilePath := filepath.Join(absOutDir, "weld_injector.go")
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
 		return errs.Wrap(err, "failed to execute wire template")
@@ -149,10 +192,16 @@ func (g *WireGenerator) Generate(targetDir string, components []*engine.Componen
 
 	defer os.Remove(tempFilePath)
 
-	log.Debug("Running DI engine via Google Wire...")
+	log.Debug("Ensuring google/wire dependency is present...")
+	getCmd := exec.Command("go", "get", "github.com/google/wire")
+	getCmd.Dir = absOutDir
+	if err := getCmd.Run(); err != nil {
+		log.Debug("go get github.com/google/wire returned an error (ignoring)", "error", err)
+	}
 
+	log.Debug("Running DI engine via Google Wire...")
 	cmd := exec.Command("go", "run", "github.com/google/wire/cmd/wire@latest", "gen", ".")
-	cmd.Dir = weldPkgDir
+	cmd.Dir = absOutDir
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -161,8 +210,8 @@ func (g *WireGenerator) Generate(targetDir string, components []*engine.Componen
 		return errs.Wrap(err, "weld engine failed to resolve dependency graph:\n%s", stderr.String())
 	}
 
-	generatedWireFile := filepath.Join(weldPkgDir, "wire_gen.go")
-	finalWeldFile := filepath.Join(weldPkgDir, "weld_container.go")
+	generatedWireFile := filepath.Join(absOutDir, "wire_gen.go")
+	finalWeldFile := filepath.Join(absOutDir, "weld_container.go")
 
 	log.Debug("Renaming generated file", "from", generatedWireFile, "to", finalWeldFile)
 	if err := os.Rename(generatedWireFile, finalWeldFile); err != nil {

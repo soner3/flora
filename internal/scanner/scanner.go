@@ -48,9 +48,7 @@ func ScanPackages(rootDir string) ([]*packages.Package, error) {
 			return nil, errs.Wrap(pkg.Errors[0], "compile error in package %s", pkg.ID)
 		}
 
-		if pkg.Name != "main" {
-			validPkgs = append(validPkgs, pkg)
-		}
+		validPkgs = append(validPkgs, pkg)
 	}
 
 	log.Debug("Successfully filtered packages", "total_loaded", len(pkgs), "valid_count", len(validPkgs))

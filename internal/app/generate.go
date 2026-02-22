@@ -22,10 +22,10 @@ import (
 	"github.com/soner3/weld/internal/scanner"
 )
 
-func RunGenerate(dir string) error {
+func RunGenerate(dir, outDir string) error {
 	log := slog.With("pkg", "app")
 
-	log.Info("Starting weld generation...", "dir", dir)
+	log.Info("Starting weld generation...", "dir", dir, "out", outDir)
 
 	log.Debug("Scanning packages for weld components...")
 	pkgs, err := scanner.ScanPackages(dir)
@@ -47,7 +47,7 @@ func RunGenerate(dir string) error {
 
 	log.Debug("Generating DI container...")
 	gen := wiregen.New()
-	if err := gen.Generate(dir, components); err != nil {
+	if err := gen.Generate(outDir, components); err != nil {
 		return err
 	}
 

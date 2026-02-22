@@ -2,14 +2,15 @@ package postgres
 
 import (
 	"github.com/soner3/weld"
+	"github.com/soner3/weld/example/config"
 )
 
 type PostgresRepository struct {
 	weld.Component `weld:"primary"`
-	cfg            Config
+	cfg            config.Config
 }
 
-func NewPostgresRepository(cfg Config) *PostgresRepository {
+func NewPostgresRepository(cfg config.Config) *PostgresRepository {
 	return &PostgresRepository{
 		cfg: cfg,
 	}

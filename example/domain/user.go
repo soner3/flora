@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/soner3/weld"
+	"github.com/soner3/weld/example/config"
 )
 
 type UserRepository interface {
@@ -13,11 +14,13 @@ type UserRepository interface {
 type UserService struct {
 	weld.Component `weld:"constructor=BuildUserService"`
 	repo           UserRepository
+	cfg            config.Config
 }
 
-func BuildUserService(repo UserRepository) *UserService {
+func BuildUserService(repo UserRepository, cfg config.Config) *UserService {
 	return &UserService{
 		repo: repo,
+		cfg:  cfg,
 	}
 }
 

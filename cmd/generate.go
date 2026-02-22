@@ -25,6 +25,7 @@ import (
 )
 
 var dir string
+var outDir string
 
 // generateCmd represents the generate command
 var generateCmd = &cobra.Command{
@@ -37,7 +38,7 @@ var generateCmd = &cobra.Command{
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		log := slog.With("pkg", "cmd")
 
-		log.Debug("Validating flag", "flag", "dir", "value", dir)
+		log.Debug("Validating flags", "dir", dir, "out", outDir)
 		if _, err := os.Stat(dir); err != nil {
 			return errs.Wrap(err, "invalid directory provided for flag 'dir': %s", dir)
 		}
@@ -47,11 +48,12 @@ var generateCmd = &cobra.Command{
 	},
 
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return app.RunGenerate(dir)
+		return app.RunGenerate(dir, outDir)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(generateCmd)
 	generateCmd.Flags().StringVarP(&dir, "dir", "d", ".", "Directory to scan")
+	generateCmd.Flags().StringVarP(&outDir, "out", "o", "weld", "Output directory for the generated container")
 }
