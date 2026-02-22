@@ -21,7 +21,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/soner3/weld/internal/errs"
+	"github.com/soner3/mint/internal/errs"
 	"github.com/spf13/cobra"
 )
 
@@ -50,7 +50,7 @@ to quickly create a Cobra application.`,
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		if weldErr, ok := err.(*errs.WeldError); ok {
+		if weldErr, ok := err.(*errs.MintError); ok {
 			slog.Error(weldErr.Error(), "id", weldErr.ID)
 			slog.Debug("Error Stacktrace", "trace", weldErr.StackTrace)
 		} else {

@@ -22,7 +22,7 @@ import (
 	"time"
 )
 
-type WeldError struct {
+type MintError struct {
 	ID         uint64
 	Inner      error
 	Message    string
@@ -31,14 +31,14 @@ type WeldError struct {
 	Misc       map[string]any
 }
 
-func Wrap(err error, message string, args ...any) *WeldError {
+func Wrap(err error, message string, args ...any) *MintError {
 	formattedMsg := message
 	if len(args) > 0 {
 		formattedMsg = fmt.Sprintf(message, args...)
 	}
 
-	if e, ok := err.(*WeldError); ok {
-		return &WeldError{
+	if e, ok := err.(*MintError); ok {
+		return &MintError{
 			Inner:      err,
 			Message:    formattedMsg,
 			StackTrace: e.StackTrace,
@@ -50,7 +50,7 @@ func Wrap(err error, message string, args ...any) *WeldError {
 
 	trace := debug.Stack()
 
-	return &WeldError{
+	return &MintError{
 		Inner:      err,
 		Message:    formattedMsg,
 		StackTrace: string(trace),
@@ -60,14 +60,14 @@ func Wrap(err error, message string, args ...any) *WeldError {
 	}
 }
 
-func (e *WeldError) Error() string {
+func (e *MintError) Error() string {
 	if e.Inner != nil {
 		return fmt.Sprintf("%s: %v", e.Message, e.Inner)
 	}
 	return e.Message
 }
 
-func (e *WeldError) Unwrap() error {
+func (e *MintError) Unwrap() error {
 	return e.Inner
 }
 

@@ -1,3 +1,18 @@
+/*
+Copyright © 2026 Soner Astan astansoner@gmail.com
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 package wiregen
 
 import (
@@ -7,8 +22,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/soner3/weld/internal/engine"
-	"github.com/soner3/weld/internal/scanner"
+	"github.com/soner3/mint/internal/engine"
+	"github.com/soner3/mint/internal/scanner"
 )
 
 func TestGenerate(t *testing.T) {
@@ -34,7 +49,7 @@ func TestGenerate(t *testing.T) {
 		{
 			name: "TestGenerateSuccessfully",
 			setupDir: func(t *testing.T) string {
-				tmpDir, err := os.MkdirTemp(".", "weld_test_out_*")
+				tmpDir, err := os.MkdirTemp(".", "mint_test_out_*")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -101,7 +116,7 @@ func TestGenerate(t *testing.T) {
 		{
 			name: "TestWireExecutionFailed",
 			setupDir: func(t *testing.T) string {
-				tmpDir, err := os.MkdirTemp(".", "weld_test_out_*")
+				tmpDir, err := os.MkdirTemp(".", "mint_test_out_*")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -110,7 +125,7 @@ func TestGenerate(t *testing.T) {
 			components: []*engine.ComponentMetadata{
 				{
 					PackageName:     "happy",
-					PackagePath:     "github.com/soner3/weld/internal/engine/wiregen/testdata/happy",
+					PackagePath:     "github.com/soner3/mint/internal/engine/wiregen/testdata/happy",
 					StructName:      "GhostComponent",
 					ConstructorName: "NewGhostComponent",
 					IsPointer:       true,
@@ -125,7 +140,7 @@ func TestGenerate(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				tempDir, err := os.MkdirTemp("", "weld_del_*")
+				tempDir, err := os.MkdirTemp("", "mint_del_*")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -149,7 +164,7 @@ func TestGenerate(t *testing.T) {
 		{
 			name: "TestReadExistingPackageName",
 			setupDir: func(t *testing.T) string {
-				tmpDir, err := os.MkdirTemp(".", "weld_test_out_*")
+				tmpDir, err := os.MkdirTemp(".", "mint_test_out_*")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -175,7 +190,7 @@ func TestGenerate(t *testing.T) {
 		{
 			name: "TestParseTemplateFailed",
 			setupDir: func(t *testing.T) string {
-				tmpDir, _ := os.MkdirTemp(".", "weld_test_out_*")
+				tmpDir, _ := os.MkdirTemp(".", "mint_test_out_*")
 
 				originalTmpl := wireTemplate
 				wireTemplate = "{{ unclosed"
@@ -193,7 +208,7 @@ func TestGenerate(t *testing.T) {
 		{
 			name: "TestExecuteTemplateFailed",
 			setupDir: func(t *testing.T) string {
-				tmpDir, _ := os.MkdirTemp(".", "weld_test_out_*")
+				tmpDir, _ := os.MkdirTemp(".", "mint_test_out_*")
 
 				originalTmpl := wireTemplate
 				wireTemplate = `{{template "ghost_template"}}`
@@ -211,9 +226,9 @@ func TestGenerate(t *testing.T) {
 		{
 			name: "TestWriteTempFileFailed",
 			setupDir: func(t *testing.T) string {
-				tmpDir, _ := os.MkdirTemp(".", "weld_test_out_*")
+				tmpDir, _ := os.MkdirTemp(".", "mint_test_out_*")
 
-				os.Mkdir(filepath.Join(tmpDir, "weld_injector.go"), 0755)
+				os.Mkdir(filepath.Join(tmpDir, "mint_injector.go"), 0755)
 
 				return tmpDir
 			},
@@ -235,12 +250,12 @@ func TestGenerate(t *testing.T) {
 		{
 			name: "TestRenameGeneratedFileFailed",
 			setupDir: func(t *testing.T) string {
-				tmpDir, err := os.MkdirTemp(".", "weld_test_out_*")
+				tmpDir, err := os.MkdirTemp(".", "mint_test_out_*")
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				blockerPath := filepath.Join(tmpDir, "weld_container.go")
+				blockerPath := filepath.Join(tmpDir, "mint_container.go")
 				if err := os.Mkdir(blockerPath, 0755); err != nil {
 					t.Fatal(err)
 				}
@@ -257,7 +272,7 @@ func TestGenerate(t *testing.T) {
 
 			outDir := tc.setupDir(t)
 
-			if strings.HasPrefix(filepath.Base(outDir), "weld_test_out_") {
+			if strings.HasPrefix(filepath.Base(outDir), "mint_test_out_") {
 				defer os.RemoveAll(outDir)
 			}
 

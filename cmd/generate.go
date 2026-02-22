@@ -19,8 +19,8 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/soner3/weld/internal/app"
-	"github.com/soner3/weld/internal/errs"
+	"github.com/soner3/mint/internal/app"
+	"github.com/soner3/mint/internal/errs"
 	"github.com/spf13/cobra"
 )
 

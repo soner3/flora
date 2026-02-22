@@ -1,4 +1,4 @@
-module github.com/soner3/weld
+module github.com/soner3/mint
 
 go 1.25.0
 

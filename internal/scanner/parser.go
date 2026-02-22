@@ -23,8 +23,8 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/soner3/weld/internal/engine"
-	"github.com/soner3/weld/internal/errs"
+	"github.com/soner3/mint/internal/engine"
+	"github.com/soner3/mint/internal/errs"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -54,7 +54,7 @@ func ParseComponents(pkgs []*packages.Package) ([]*engine.ComponentMetadata, err
 			obj := scope.Lookup(name)
 			if typeName, ok := obj.(*types.TypeName); ok {
 				if structType, ok := typeName.Type().Underlying().(*types.Struct); ok {
-					isComponent, rawTag := getWeldComponentInfo(structType)
+					isComponent, rawTag := getMintComponentInfo(structType)
 
 					if isComponent {
 						metadata := &engine.ComponentMetadata{
@@ -63,7 +63,7 @@ func ParseComponents(pkgs []*packages.Package) ([]*engine.ComponentMetadata, err
 							StructName:  name,
 						}
 
-						parseWeldTag(rawTag, metadata)
+						parseMintTag(rawTag, metadata)
 
 						log.Debug("Found component", "component", name, "package", pkg.Name, "constructor", metadata.ConstructorName)
 
@@ -195,17 +195,17 @@ func bindInterfaceToComponent(comp *scannedComponent, ifaceType types.Type) {
 	}
 }
 
-func getWeldComponentInfo(structType *types.Struct) (bool, string) {
+func getMintComponentInfo(structType *types.Struct) (bool, string) {
 	for i := 0; i < structType.NumFields(); i++ {
 		field := structType.Field(i)
-		if field.Anonymous() && field.Type().String() == "github.com/soner3/weld.Component" {
+		if field.Anonymous() && field.Type().String() == "github.com/soner3/mint.Component" {
 			return true, structType.Tag(i)
 		}
 	}
 	return false, ""
 }
 
-func parseWeldTag(rawTag string, metadata *engine.ComponentMetadata) {
+func parseMintTag(rawTag string, metadata *engine.ComponentMetadata) {
 	metadata.ConstructorName = "New" + metadata.StructName
 	metadata.IsPrimary = false
 	metadata.Scope = "singleton"
@@ -215,7 +215,7 @@ func parseWeldTag(rawTag string, metadata *engine.ComponentMetadata) {
 	}
 
 	structTag := reflect.StructTag(rawTag)
-	val := structTag.Get("weld")
+	val := structTag.Get("mint")
 
 	if val == "" {
 		return

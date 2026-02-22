@@ -1,9 +1,9 @@
 package config
 
-import "github.com/soner3/weld"
+import "github.com/soner3/mint"
 
 type Config struct {
-	weld.Component `weld:"constructor=NewConfig"`
+	mint.Component `mint:"constructor=NewConfig"`
 	Port           int
 	Host           string
 }
