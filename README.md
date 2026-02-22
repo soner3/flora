@@ -143,3 +143,8 @@ You can customize how Flora wires your components using the `flora` tag:
 
 Flora is released under the [Apache 2.0 License](https://www.google.com/search?q=LICENSE).
 
+## Acknowledgments
+
+Flora is built on top of the incredible [Google Wire](https://github.com/google/wire) project. 
+
+While Flora provides the auto-discovery, struct-tag parsing, and the Spring-like developer experience, the actual heavy lifting of safely generating the static, compile-time dependency graph is powered by Wire.
