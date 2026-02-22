@@ -22,27 +22,27 @@ import (
 )
 
 func TestWrap(t *testing.T) {
-	testCases := []struct {
+	testcases := []struct {
 		name    string
 		err     error
 		message string
 		args    []any
 	}{
 		{
-			name:    "Test_AlreadyWrappedError",
+			name:    "TestWrapWithWrappedError",
 			err:     Wrap(errors.New("test"), "test"),
 			message: "test: %s",
 			args:    []any{"test"},
 		},
 		{
-			name:    "Test_NewError",
+			name:    "TestWrapNewError",
 			err:     errors.New("test"),
 			message: "test",
 			args:    nil,
 		},
 	}
 
-	for _, tc := range testCases {
+	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 			out := Wrap(tc.err, tc.message, tc.args...)
 			if fmt.Sprintf(tc.message, tc.args...) != out.Message {

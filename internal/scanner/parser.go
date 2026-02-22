@@ -16,6 +16,8 @@ limitations under the License.
 package scanner
 
 import (
+	"errors"
+	"fmt"
 	"go/types"
 	"log/slog"
 	"reflect"
@@ -24,6 +26,14 @@ import (
 	"github.com/soner3/weld/internal/engine"
 	"github.com/soner3/weld/internal/errs"
 	"golang.org/x/tools/go/packages"
+)
+
+var (
+	ErrConstructorNotFound = errors.New("constructor not found")
+	ErrConstructorNotFunc  = errors.New("constructor is not a function")
+	ErrInvalidConstructor  = errors.New("invalid constructor")
+	ErrInterfaceCollision  = errors.New("interface collision")
+	ErrNoImplementation    = errors.New("no component implements interface")
 )
 
 type scannedComponent struct {
@@ -42,9 +52,6 @@ func ParseComponents(pkgs []*packages.Package) ([]*engine.ComponentMetadata, err
 		scope := pkg.Types.Scope()
 		for _, name := range scope.Names() {
 			obj := scope.Lookup(name)
-			if obj == nil {
-				continue
-			}
 			if typeName, ok := obj.(*types.TypeName); ok {
 				if structType, ok := typeName.Type().Underlying().(*types.Struct); ok {
 					isComponent, rawTag := getWeldComponentInfo(structType)
@@ -63,13 +70,15 @@ func ParseComponents(pkgs []*packages.Package) ([]*engine.ComponentMetadata, err
 						constructorObj := scope.Lookup(metadata.ConstructorName)
 
 						if constructorObj == nil {
-							return nil, errs.Wrap(nil, "constructor '%s' not found for component '%s' in package '%s'",
+							chainErr := fmt.Errorf("%w: %v", ErrConstructorNotFound, constructorObj)
+							return nil, errs.Wrap(chainErr, "constructor '%s' not found for component '%s' in package '%s'",
 								metadata.ConstructorName, metadata.StructName, pkg.Name)
 						}
 
 						funcObj, ok := constructorObj.(*types.Func)
 						if !ok {
-							return nil, errs.Wrap(nil, "expected '%s' to be a function for component '%s', but it is a %T",
+							chainErr := fmt.Errorf("%w: %v", ErrConstructorNotFunc, funcObj)
+							return nil, errs.Wrap(chainErr, "expected '%s' to be a function for component '%s', but it is a %T",
 								metadata.ConstructorName, metadata.StructName, constructorObj)
 						}
 
@@ -78,7 +87,8 @@ func ParseComponents(pkgs []*packages.Package) ([]*engine.ComponentMetadata, err
 						results := sig.Results()
 
 						if results.Len() == 0 {
-							return nil, errs.Wrap(nil, "invalid constructor: '%s' for component '%s' in package '%s' must return at least one value",
+							chainErr := fmt.Errorf("%w: %v", ErrInvalidConstructor, results)
+							return nil, errs.Wrap(chainErr, "invalid constructor: '%s' for component '%s' in package '%s' must return at least one value",
 								metadata.ConstructorName, metadata.StructName, pkg.Name)
 						}
 
@@ -94,7 +104,8 @@ func ParseComponents(pkgs []*packages.Package) ([]*engine.ComponentMetadata, err
 						}
 
 						if !types.Identical(baseRetType, typeName.Type()) {
-							return nil, errs.Wrap(nil, "invalid constructor: '%s' returns '%s', but must return '%s' or '*%s'",
+							chainErr := fmt.Errorf("%w: %v", ErrInvalidConstructor, retType)
+							return nil, errs.Wrap(chainErr, "invalid constructor: '%s' returns '%s', but must return '%s' or '*%s'",
 								metadata.ConstructorName, retType.String(), metadata.StructName, metadata.StructName)
 						}
 
@@ -152,13 +163,16 @@ func ParseComponents(pkgs []*packages.Package) ([]*engine.ComponentMetadata, err
 				bindInterfaceToComponent(primaryComp, neededType)
 				log.Debug("Bound interface to primary component", "interface", neededName, "component", primaryComp.Metadata.StructName)
 			case 0:
-				return nil, errs.Wrap(nil, "interface collision: %d components implement injected interface '%s', but none is marked 'primary'", len(implementers), neededName)
+				chainErr := fmt.Errorf("%w: %v", ErrInterfaceCollision, implementers)
+				return nil, errs.Wrap(chainErr, "interface collision: %d components implement injected interface '%s', but none is marked 'primary'", len(implementers), neededName)
 			default:
-				return nil, errs.Wrap(nil, "interface collision: multiple components implementing '%s' are marked as 'primary'", neededName)
+				chainErr := fmt.Errorf("%w: %v", ErrInterfaceCollision, implementers)
+				return nil, errs.Wrap(chainErr, "interface collision: multiple components implementing '%s' are marked as 'primary'", neededName)
 			}
 
 		} else {
-			return nil, errs.Wrap(nil, "no component found that implements interface '%s'", neededName)
+			chainErr := fmt.Errorf("%w: %v", ErrNoImplementation, neededName)
+			return nil, errs.Wrap(chainErr, "no component found that implements interface '%s'", neededName)
 		}
 	}
 

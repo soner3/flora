@@ -16,10 +16,17 @@ limitations under the License.
 package scanner
 
 import (
+	"errors"
+	"fmt"
 	"log/slog"
 
 	"github.com/soner3/weld/internal/errs"
 	"golang.org/x/tools/go/packages"
+)
+
+var (
+	ErrLoadPackages = errors.New("failed to load packages")
+	ErrCompile      = errors.New("compile error in package")
 )
 
 func ScanPackages(rootDir string) ([]*packages.Package, error) {
@@ -39,13 +46,15 @@ func ScanPackages(rootDir string) ([]*packages.Package, error) {
 	log.Debug("Loading packages via packages.Load...")
 	pkgs, err := packages.Load(cfg, "./...")
 	if err != nil {
-		return nil, errs.Wrap(err, "failed to load packages in dir %s", rootDir)
+		chainErr := fmt.Errorf("%w: %w", ErrLoadPackages, err)
+		return nil, errs.Wrap(chainErr, "directory: %s", rootDir)
 	}
 
 	var validPkgs []*packages.Package
 	for _, pkg := range pkgs {
 		if len(pkg.Errors) > 0 {
-			return nil, errs.Wrap(pkg.Errors[0], "compile error in package %s", pkg.ID)
+			chainErr := fmt.Errorf("%w: %w", ErrCompile, pkg.Errors[0])
+			return nil, errs.Wrap(chainErr, "package ID: %s", pkg.ID)
 		}
 
 		validPkgs = append(validPkgs, pkg)
