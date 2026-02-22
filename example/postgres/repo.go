@@ -6,10 +6,13 @@ import (
 
 type PostgresRepository struct {
 	weld.Component `weld:"primary"`
+	cfg            Config
 }
 
-func NewPostgresRepository() *PostgresRepository {
-	return &PostgresRepository{}
+func NewPostgresRepository(cfg Config) *PostgresRepository {
+	return &PostgresRepository{
+		cfg: cfg,
+	}
 }
 
 func (r *PostgresRepository) GetUserName() string {

@@ -28,6 +28,7 @@ type ComponentMetadata struct {
 	ConstructorName string
 	IsPrimary       bool
 	Scope           string
+	IsPointer       bool
 	Implements      []InterfaceMetadata
 }
 

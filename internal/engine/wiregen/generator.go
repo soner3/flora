@@ -48,7 +48,11 @@ import (
 // WeldContainer holds all configured dependencies.
 type WeldContainer struct {
 	{{range .Providers}}
+	{{if .IsPointer}}
 	{{.StructName}} *{{.PackageName}}.{{.StructName}}
+	{{else}}
+	{{.StructName}} {{.PackageName}}.{{.StructName}}
+	{{end}}
 	{{end}}
 }
 
@@ -62,7 +66,7 @@ func InitializeContainer() (*WeldContainer, error) {
 		
 		// 2. Alle Interfaces an die passenden Structs binden
 		{{range .Bindings}}
-		wire.Bind(new({{.InterfacePkg}}.{{.InterfaceName}}), new(*{{.ComponentPkg}}.{{.StructName}})),
+		wire.Bind(new({{.InterfacePkg}}.{{.InterfaceName}}), new({{if .IsPointer}}*{{end}}{{.ComponentPkg}}.{{.StructName}})),
 		{{end}}
 
 		// 3. Den Container selbst zusammenbauen
@@ -84,6 +88,7 @@ type bindingData struct {
 	InterfaceName string
 	ComponentPkg  string
 	StructName    string
+	IsPointer     bool
 }
 
 func (g *WireGenerator) Generate(targetDir string, components []*engine.ComponentMetadata) error {
@@ -116,6 +121,7 @@ func (g *WireGenerator) Generate(targetDir string, components []*engine.Componen
 				InterfaceName: iface.InterfaceName,
 				ComponentPkg:  comp.PackageName,
 				StructName:    comp.StructName,
+				IsPointer:     comp.IsPointer,
 			})
 		}
 	}

@@ -74,6 +74,30 @@ func ParseComponents(pkgs []*packages.Package) ([]*engine.ComponentMetadata, err
 						}
 
 						sig := funcObj.Type().(*types.Signature)
+
+						results := sig.Results()
+
+						if results.Len() == 0 {
+							return nil, errs.Wrap(nil, "invalid constructor: '%s' for component '%s' in package '%s' must return at least one value",
+								metadata.ConstructorName, metadata.StructName, pkg.Name)
+						}
+
+						retType := results.At(0).Type()
+						var baseRetType types.Type
+
+						if ptr, isPtr := retType.(*types.Pointer); isPtr {
+							metadata.IsPointer = true
+							baseRetType = ptr.Elem()
+						} else {
+							metadata.IsPointer = false
+							baseRetType = retType
+						}
+
+						if !types.Identical(baseRetType, typeName.Type()) {
+							return nil, errs.Wrap(nil, "invalid constructor: '%s' returns '%s', but must return '%s' or '*%s'",
+								metadata.ConstructorName, retType.String(), metadata.StructName, metadata.StructName)
+						}
+
 						params := sig.Params()
 
 						for v := range params.Variables() {
