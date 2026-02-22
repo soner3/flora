@@ -17,6 +17,8 @@ package wiregen
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"go/build"
 	"log/slog"
 	"os"
@@ -29,13 +31,26 @@ import (
 	"github.com/soner3/weld/internal/errs"
 )
 
+var (
+	ErrResolveOutputDir     = errors.New("failed to resolve absolute output directory")
+	ErrCreateOutputDir      = errors.New("failed to create output directory")
+	ErrMainComponentLeak    = errors.New("component belongs to package 'main' (Go forbids importing main)")
+	ErrMainInterfaceLeak    = errors.New("interface belongs to package 'main' (Go forbids importing main)")
+	ErrParseTemplate        = errors.New("failed to parse wire template")
+	ErrExecuteTemplate      = errors.New("failed to execute wire template")
+	ErrWriteTempFile        = errors.New("failed to write temporary wire file")
+	ErrEnsureWireDependency = errors.New("failed to ensure google/wire dependency")
+	ErrWireExecution        = errors.New("weld engine failed to resolve dependency graph")
+	ErrRenameGeneratedFile  = errors.New("failed to rename generated container file")
+)
+
 type WireGenerator struct{}
 
 func New() *WireGenerator {
 	return &WireGenerator{}
 }
 
-const wireTemplate = `//go:build wireinject
+var wireTemplate = `//go:build wireinject
 // +build wireinject
 
 package {{.PackageName}}
@@ -106,11 +121,13 @@ func (g *WireGenerator) Generate(outDir string, components []*engine.ComponentMe
 
 	absOutDir, err := filepath.Abs(outDir)
 	if err != nil {
-		return errs.Wrap(err, "failed to resolve absolute output directory")
+		chainErr := fmt.Errorf("%w: %w", ErrResolveOutputDir, err)
+		return errs.Wrap(chainErr, "provided path: %s", outDir)
 	}
 
 	if err := os.MkdirAll(absOutDir, os.ModePerm); err != nil {
-		return errs.Wrap(err, "failed to create output directory")
+		chainErr := fmt.Errorf("%w: %w", ErrCreateOutputDir, err)
+		return errs.Wrap(chainErr, "absolute path: %s", absOutDir)
 	}
 
 	pkgName := filepath.Base(absOutDir)
@@ -134,7 +151,7 @@ func (g *WireGenerator) Generate(outDir string, components []*engine.ComponentMe
 		compPrefix := ""
 		if comp.PackageName != pkgName {
 			if comp.PackageName == "main" {
-				return errs.Wrap(nil, "cannot generate container in package '%s' because component '%s' belongs to package 'main' (Go forbids importing main). Change output dir (-o) to your main directory or move the component.", pkgName, comp.StructName)
+				return errs.Wrap(ErrMainComponentLeak, "cannot generate container in package '%s' because component '%s' belongs to package 'main'. Change output dir (-o) to your main directory or move the component.", pkgName, comp.StructName)
 			}
 			compPrefix = comp.PackageName + "."
 			importSet[comp.PackagePath] = true
@@ -151,7 +168,7 @@ func (g *WireGenerator) Generate(outDir string, components []*engine.ComponentMe
 			ifacePrefix := ""
 			if iface.PackageName != pkgName {
 				if iface.PackageName == "main" {
-					return errs.Wrap(nil, "cannot generate container in package '%s' because interface '%s' belongs to package 'main'. Change output dir (-o) to your main directory or move the interface.", pkgName, iface.InterfaceName)
+					return errs.Wrap(ErrMainInterfaceLeak, "cannot generate container in package '%s' because interface '%s' belongs to package 'main'. Change output dir (-o) to your main directory or move the interface.", pkgName, iface.InterfaceName)
 				}
 				ifacePrefix = iface.PackageName + "."
 				importSet[iface.PackagePath] = true
@@ -176,18 +193,21 @@ func (g *WireGenerator) Generate(outDir string, components []*engine.ComponentMe
 
 	tmpl, err := template.New("wire").Parse(wireTemplate)
 	if err != nil {
-		return errs.Wrap(err, "failed to parse wire template")
+		chainErr := fmt.Errorf("%w: %w", ErrParseTemplate, err)
+		return errs.Wrap(chainErr, "template parsing failed")
 	}
 
 	tempFilePath := filepath.Join(absOutDir, "weld_injector.go")
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
-		return errs.Wrap(err, "failed to execute wire template")
+		chainErr := fmt.Errorf("%w: %w", ErrExecuteTemplate, err)
+		return errs.Wrap(chainErr, "failed to apply data to template")
 	}
 
 	log.Debug("Writing temporary wire template", "path", tempFilePath)
 	if err := os.WriteFile(tempFilePath, buf.Bytes(), 0644); err != nil {
-		return errs.Wrap(err, "failed to write temporary wire file")
+		chainErr := fmt.Errorf("%w: %w", ErrWriteTempFile, err)
+		return errs.Wrap(chainErr, "path: %s", tempFilePath)
 	}
 
 	defer os.Remove(tempFilePath)
@@ -196,7 +216,8 @@ func (g *WireGenerator) Generate(outDir string, components []*engine.ComponentMe
 	getCmd := exec.Command("go", "get", "github.com/google/wire")
 	getCmd.Dir = absOutDir
 	if err := getCmd.Run(); err != nil {
-		log.Debug("go get github.com/google/wire returned an error (ignoring)", "error", err)
+		chainErr := fmt.Errorf("%w: %w", ErrEnsureWireDependency, err)
+		return errs.Wrap(chainErr, "failed running 'go get github.com/google/wire' in %s", absOutDir)
 	}
 
 	log.Debug("Running DI engine via Google Wire...")
@@ -207,7 +228,8 @@ func (g *WireGenerator) Generate(outDir string, components []*engine.ComponentMe
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		return errs.Wrap(err, "weld engine failed to resolve dependency graph:\n%s", stderr.String())
+		chainErr := fmt.Errorf("%w: %w", ErrWireExecution, err)
+		return errs.Wrap(chainErr, "stderr:\n%s", stderr.String())
 	}
 
 	generatedWireFile := filepath.Join(absOutDir, "wire_gen.go")
@@ -215,7 +237,8 @@ func (g *WireGenerator) Generate(outDir string, components []*engine.ComponentMe
 
 	log.Debug("Renaming generated file", "from", generatedWireFile, "to", finalWeldFile)
 	if err := os.Rename(generatedWireFile, finalWeldFile); err != nil {
-		return errs.Wrap(err, "failed to rename generated container file")
+		chainErr := fmt.Errorf("%w: %w", ErrRenameGeneratedFile, err)
+		return errs.Wrap(chainErr, "from %s to %s", generatedWireFile, finalWeldFile)
 	}
 
 	return nil
