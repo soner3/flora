@@ -33,21 +33,21 @@ func RunGenerate(dir, outDir string) error {
 		return err
 	}
 
-	components, err := scanner.ParseComponents(pkgs)
+	genCtx, err := scanner.ParseComponents(pkgs)
 	if err != nil {
 		return err
 	}
 
-	if len(components) == 0 {
+	if len(genCtx.Components) == 0 && len(genCtx.SliceBindings) == 0 {
 		log.Warn("No flora components found. Nothing to generate.")
 		return nil
 	}
 
-	log.Info("Scan complete", "components_found", len(components))
+	log.Info("Scan complete", "components_found", len(genCtx.Components), "slice_bindings_found", len(genCtx.SliceBindings))
 
 	log.Debug("Generating DI container...")
 	gen := wiregen.New()
-	if err := gen.Generate(outDir, components); err != nil {
+	if err := gen.Generate(outDir, genCtx); err != nil {
 		return err
 	}
 

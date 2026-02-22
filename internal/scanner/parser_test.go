@@ -76,7 +76,7 @@ func TestParseComponents(t *testing.T) {
 				t.Fatalf("ScanPackages failed: %v", err)
 			}
 
-			components, err := ParseComponents(packages)
+			genCtx, err := ParseComponents(packages)
 
 			if tc.expErr != nil {
 				if !errors.Is(err, tc.expErr) {
@@ -88,8 +88,12 @@ func TestParseComponents(t *testing.T) {
 					t.Fatalf("ParseComponents failed: %v", err)
 				}
 
-				if len(components) < 1 {
+				if len(genCtx.Components) < 1 {
 					t.Fatalf("ParseComponents returned no components")
+				}
+
+				if len(genCtx.SliceBindings) < 1 {
+					t.Fatalf("ParseComponents returned no slice bindings")
 				}
 			}
 

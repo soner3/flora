@@ -28,4 +28,6 @@ func main() {
 	}
 
 	container.UserService.PrintUser()
+
+	container.PluginManager.RunAll()
 }

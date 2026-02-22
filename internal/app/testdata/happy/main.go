@@ -17,6 +17,71 @@ package happy
 
 import "github.com/soner3/flora"
 
-type App struct{ flora.Component }
+type Greeter interface {
+	Greet() string
+}
 
-func NewApp() *App { return nil }
+type SimpleLogger struct {
+	flora.Component
+}
+
+func NewSimpleLogger() SimpleLogger {
+	return SimpleLogger{}
+}
+
+type GermanGreeter struct {
+	flora.Component `flora:"constructor=BuildGermanGreeter,"`
+}
+
+func BuildGermanGreeter() *GermanGreeter {
+	return &GermanGreeter{}
+}
+
+func (g *GermanGreeter) Greet() string {
+	return "Hallo"
+}
+
+type App struct {
+	flora.Component
+}
+
+func NewApp(g Greeter, l SimpleLogger) *App {
+	return &App{}
+}
+
+type JustANormalStruct struct {
+	SomeConfig string
+	Value      int
+}
+
+type UntaggedComponent struct {
+	flora.Component
+}
+
+func NewUntaggedComponent() *UntaggedComponent {
+	return nil
+}
+
+type Plugin interface {
+	Execute()
+}
+
+type AuthPlugin struct {
+	flora.Component
+}
+
+func NewAuthPlugin() *AuthPlugin { return nil }
+func (p *AuthPlugin) Execute()   {}
+
+type MetricsPlugin struct {
+	flora.Component
+}
+
+func NewMetricsPlugin() *MetricsPlugin { return nil }
+func (p *MetricsPlugin) Execute()      {}
+
+type PluginManager struct {
+	flora.Component
+}
+
+func NewPluginManager(plugins []Plugin) *PluginManager { return nil }

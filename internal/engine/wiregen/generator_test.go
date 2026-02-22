@@ -28,23 +28,23 @@ import (
 
 func TestGenerate(t *testing.T) {
 
-	loadHappyComponents := func(t *testing.T) []*engine.ComponentMetadata {
+	loadHappyComponents := func(t *testing.T) *engine.GeneratorContext {
 		packages, err := scanner.ScanPackages("testdata/happy")
 		if err != nil {
 			t.Fatalf("ScanPackages failed: %v", err)
 		}
-		comps, err := scanner.ParseComponents(packages)
+		genCtx, err := scanner.ParseComponents(packages)
 		if err != nil {
 			t.Fatalf("ParseComponents failed: %v", err)
 		}
-		return comps
+		return genCtx
 	}
 
 	testcases := []struct {
-		name       string
-		setupDir   func(t *testing.T) string
-		components []*engine.ComponentMetadata
-		expErr     error
+		name     string
+		setupDir func(t *testing.T) string
+		genCtx   *engine.GeneratorContext
+		expErr   error
 	}{
 		{
 			name: "TestGenerateSuccessfully",
@@ -55,28 +55,30 @@ func TestGenerate(t *testing.T) {
 				}
 				return tmpDir
 			},
-			components: nil,
-			expErr:     nil,
+			genCtx: nil,
+			expErr: nil,
 		},
 		{
 			name: "TestNoComponentsProvided",
 			setupDir: func(t *testing.T) string {
 				return t.TempDir()
 			},
-			components: []*engine.ComponentMetadata{},
-			expErr:     nil,
+			genCtx: &engine.GeneratorContext{},
+			expErr: nil,
 		},
 		{
 			name: "TestComponentInMainLeak",
 			setupDir: func(t *testing.T) string {
 				return t.TempDir()
 			},
-			components: []*engine.ComponentMetadata{
-				{
-					PackageName:     "main",
-					PackagePath:     "github.com/test/main",
-					StructName:      "App",
-					ConstructorName: "NewApp",
+			genCtx: &engine.GeneratorContext{
+				Components: []*engine.ComponentMetadata{
+					{
+						PackageName:     "main",
+						PackagePath:     "github.com/test/main",
+						StructName:      "App",
+						ConstructorName: "NewApp",
+					},
 				},
 			},
 			expErr: ErrMainComponentLeak,
@@ -86,17 +88,19 @@ func TestGenerate(t *testing.T) {
 			setupDir: func(t *testing.T) string {
 				return t.TempDir()
 			},
-			components: []*engine.ComponentMetadata{
-				{
-					PackageName:     "otherpkg",
-					PackagePath:     "github.com/test/otherpkg",
-					StructName:      "Service",
-					ConstructorName: "NewService",
-					Implements: []engine.InterfaceMetadata{
-						{
-							PackageName:   "main",
-							PackagePath:   "github.com/test/main",
-							InterfaceName: "MyInterface",
+			genCtx: &engine.GeneratorContext{
+				Components: []*engine.ComponentMetadata{
+					{
+						PackageName:     "otherpkg",
+						PackagePath:     "github.com/test/otherpkg",
+						StructName:      "Service",
+						ConstructorName: "NewService",
+						Implements: []engine.InterfaceMetadata{
+							{
+								PackageName:   "main",
+								PackagePath:   "github.com/test/main",
+								InterfaceName: "MyInterface",
+							},
 						},
 					},
 				},
@@ -108,8 +112,10 @@ func TestGenerate(t *testing.T) {
 			setupDir: func(t *testing.T) string {
 				return "invalid\x00path"
 			},
-			components: []*engine.ComponentMetadata{
-				{PackageName: "pkg", StructName: "A", ConstructorName: "NewA"},
+			genCtx: &engine.GeneratorContext{
+				Components: []*engine.ComponentMetadata{
+					{PackageName: "pkg", StructName: "A", ConstructorName: "NewA"},
+				},
 			},
 			expErr: ErrCreateOutputDir,
 		},
@@ -122,13 +128,15 @@ func TestGenerate(t *testing.T) {
 				}
 				return tmpDir
 			},
-			components: []*engine.ComponentMetadata{
-				{
-					PackageName:     "happy",
-					PackagePath:     "github.com/soner3/flora/internal/engine/wiregen/testdata/happy",
-					StructName:      "GhostComponent",
-					ConstructorName: "NewGhostComponent",
-					IsPointer:       true,
+			genCtx: &engine.GeneratorContext{
+				Components: []*engine.ComponentMetadata{
+					{
+						PackageName:     "happy",
+						PackagePath:     "github.com/soner3/flora/internal/engine/wiregen/testdata/happy",
+						StructName:      "GhostComponent",
+						ConstructorName: "NewGhostComponent",
+						IsPointer:       true,
+					},
 				},
 			},
 			expErr: ErrWireExecution,
@@ -156,8 +164,10 @@ func TestGenerate(t *testing.T) {
 
 				return "."
 			},
-			components: []*engine.ComponentMetadata{
-				{PackageName: "pkg", StructName: "A", ConstructorName: "NewA"},
+			genCtx: &engine.GeneratorContext{
+				Components: []*engine.ComponentMetadata{
+					{PackageName: "pkg", StructName: "A", ConstructorName: "NewA"},
+				},
 			},
 			expErr: ErrResolveOutputDir,
 		},
@@ -172,8 +182,10 @@ func TestGenerate(t *testing.T) {
 				os.WriteFile(dummyFile, []byte("package custompkg\n"), 0644)
 				return tmpDir
 			},
-			components: []*engine.ComponentMetadata{
-				{PackageName: "custompkg", StructName: "A", ConstructorName: "NewA"},
+			genCtx: &engine.GeneratorContext{
+				Components: []*engine.ComponentMetadata{
+					{PackageName: "custompkg", StructName: "A", ConstructorName: "NewA"},
+				},
 			},
 			expErr: ErrWireExecution,
 		},
@@ -182,8 +194,10 @@ func TestGenerate(t *testing.T) {
 			setupDir: func(t *testing.T) string {
 				return "/"
 			},
-			components: []*engine.ComponentMetadata{
-				{PackageName: "main", StructName: "A", ConstructorName: "NewA"},
+			genCtx: &engine.GeneratorContext{
+				Components: []*engine.ComponentMetadata{
+					{PackageName: "main", StructName: "A", ConstructorName: "NewA"},
+				},
 			},
 			expErr: ErrWriteTempFile,
 		},
@@ -200,8 +214,10 @@ func TestGenerate(t *testing.T) {
 				})
 				return tmpDir
 			},
-			components: []*engine.ComponentMetadata{
-				{PackageName: "pkg", StructName: "A", ConstructorName: "NewA"},
+			genCtx: &engine.GeneratorContext{
+				Components: []*engine.ComponentMetadata{
+					{PackageName: "pkg", StructName: "A", ConstructorName: "NewA"},
+				},
 			},
 			expErr: ErrParseTemplate,
 		},
@@ -218,8 +234,10 @@ func TestGenerate(t *testing.T) {
 				})
 				return tmpDir
 			},
-			components: []*engine.ComponentMetadata{
-				{PackageName: "pkg", StructName: "A", ConstructorName: "NewA"},
+			genCtx: &engine.GeneratorContext{
+				Components: []*engine.ComponentMetadata{
+					{PackageName: "pkg", StructName: "A", ConstructorName: "NewA"},
+				},
 			},
 			expErr: ErrExecuteTemplate,
 		},
@@ -232,8 +250,10 @@ func TestGenerate(t *testing.T) {
 
 				return tmpDir
 			},
-			components: []*engine.ComponentMetadata{
-				{PackageName: "pkg", StructName: "A", ConstructorName: "NewA"},
+			genCtx: &engine.GeneratorContext{
+				Components: []*engine.ComponentMetadata{
+					{PackageName: "pkg", StructName: "A", ConstructorName: "NewA"},
+				},
 			},
 			expErr: ErrWriteTempFile,
 		},
@@ -242,8 +262,10 @@ func TestGenerate(t *testing.T) {
 			setupDir: func(t *testing.T) string {
 				return t.TempDir()
 			},
-			components: []*engine.ComponentMetadata{
-				{PackageName: "pkg", StructName: "A", ConstructorName: "NewA"},
+			genCtx: &engine.GeneratorContext{
+				Components: []*engine.ComponentMetadata{
+					{PackageName: "pkg", StructName: "A", ConstructorName: "NewA"},
+				},
 			},
 			expErr: ErrEnsureWireDependency,
 		},
@@ -262,8 +284,8 @@ func TestGenerate(t *testing.T) {
 
 				return tmpDir
 			},
-			components: nil,
-			expErr:     ErrRenameGeneratedFile,
+			genCtx: nil,
+			expErr: ErrRenameGeneratedFile,
 		},
 	}
 
@@ -276,12 +298,12 @@ func TestGenerate(t *testing.T) {
 				defer os.RemoveAll(outDir)
 			}
 
-			comps := tc.components
-			if comps == nil {
-				comps = loadHappyComponents(t)
+			genCtx := tc.genCtx
+			if genCtx == nil {
+				genCtx = loadHappyComponents(t)
 			}
 
-			err := New().Generate(outDir, comps)
+			err := New().Generate(outDir, genCtx)
 
 			if tc.expErr != nil {
 				if err == nil {

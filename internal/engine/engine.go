@@ -32,6 +32,16 @@ type ComponentMetadata struct {
 	Implements      []InterfaceMetadata
 }
 
+type SliceBindingMetadata struct {
+	Interface       InterfaceMetadata
+	Implementations []*ComponentMetadata
+}
+
+type GeneratorContext struct {
+	Components    []*ComponentMetadata
+	SliceBindings []*SliceBindingMetadata
+}
+
 type Generator interface {
-	Generate(targetDir string, components []ComponentMetadata) error
+	Generate(targetDir string, genCtx *GeneratorContext) error
 }

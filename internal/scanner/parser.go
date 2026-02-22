@@ -41,12 +41,13 @@ type scannedComponent struct {
 	PtrType  *types.Pointer
 }
 
-func ParseComponents(pkgs []*packages.Package) ([]*engine.ComponentMetadata, error) {
+func ParseComponents(pkgs []*packages.Package) (*engine.GeneratorContext, error) {
 	log := slog.With("pkg", "scanner")
 	log.Debug("Parsing components from packages", "package_count", len(pkgs))
 
 	var components []scannedComponent
 	neededInterfaces := make(map[string]types.Type)
+	neededSlices := make(map[string]types.Type)
 
 	for _, pkg := range pkgs {
 		scope := pkg.Types.Scope()
@@ -119,6 +120,15 @@ func ParseComponents(pkgs []*packages.Package) ([]*engine.ComponentMetadata, err
 									neededInterfaces[paramType.String()] = paramType
 								}
 							}
+
+							if sliceType, isSlice := paramType.(*types.Slice); isSlice {
+								elemType := sliceType.Elem()
+								if iface, isInterface := elemType.Underlying().(*types.Interface); isInterface {
+									if !iface.Empty() {
+										neededSlices[elemType.String()] = elemType
+									}
+								}
+							}
 						}
 
 						components = append(components, scannedComponent{
@@ -176,13 +186,43 @@ func ParseComponents(pkgs []*packages.Package) ([]*engine.ComponentMetadata, err
 		}
 	}
 
+	log.Debug("Resolving slice bindings", "slices_needed", len(neededSlices))
+	var sliceBindings []*engine.SliceBindingMetadata
+
+	for neededName, neededType := range neededSlices {
+		iface := neededType.Underlying().(*types.Interface)
+		var implementers []*engine.ComponentMetadata
+
+		for _, comp := range components {
+			if types.Implements(comp.PtrType, iface) {
+				implementers = append(implementers, comp.Metadata)
+			}
+		}
+
+		if named, ok := neededType.(*types.Named); ok {
+			sliceBindings = append(sliceBindings, &engine.SliceBindingMetadata{
+				Interface: engine.InterfaceMetadata{
+					PackageName:   named.Obj().Pkg().Name(),
+					PackagePath:   named.Obj().Pkg().Path(),
+					InterfaceName: named.Obj().Name(),
+				},
+				Implementations: implementers,
+			})
+			log.Debug("Resolved slice binding", "interface", neededName, "implementations_count", len(implementers))
+		}
+	}
+
 	var finalMetadata []*engine.ComponentMetadata
 	for _, comp := range components {
 		finalMetadata = append(finalMetadata, comp.Metadata)
 	}
 
-	log.Debug("Successfully parsed all components", "total", len(finalMetadata))
-	return finalMetadata, nil
+	log.Debug("Successfully parsed all components", "total", len(finalMetadata), "slices", len(sliceBindings))
+
+	return &engine.GeneratorContext{
+		Components:    finalMetadata,
+		SliceBindings: sliceBindings,
+	}, nil
 }
 
 func bindInterfaceToComponent(comp *scannedComponent, ifaceType types.Type) {

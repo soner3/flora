@@ -62,8 +62,26 @@ func NewUntaggedComponent() *UntaggedComponent {
 	return nil
 }
 
-var _ = "Trigger obj == nil check"
-
-func init() {
-	// Dummy init
+type Plugin interface {
+	Execute()
 }
+
+type AuthPlugin struct {
+	flora.Component
+}
+
+func NewAuthPlugin() *AuthPlugin { return nil }
+func (p *AuthPlugin) Execute()   {}
+
+type MetricsPlugin struct {
+	flora.Component
+}
+
+func NewMetricsPlugin() *MetricsPlugin { return nil }
+func (p *MetricsPlugin) Execute()      {}
+
+type PluginManager struct {
+	flora.Component
+}
+
+func NewPluginManager(plugins []Plugin) *PluginManager { return nil }

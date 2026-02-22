@@ -62,9 +62,21 @@ import (
 	{{end}}
 )
 
+{{range .SliceBindings}}
+func ProvideSliceOf{{.InterfaceName}}({{range .Implementations}}{{.ParamName}} {{.TypePrefix}}{{.StructName}}, {{end}}) []{{.InterfacePrefix}}{{.InterfaceName}} {
+	return []{{.InterfacePrefix}}{{.InterfaceName}}{
+		{{range .Implementations}}{{.ParamName}},{{end}}
+	}
+}
+{{end}}
+
 type FloraContainer struct {
 	{{range .Providers}}
 	{{.StructName}} {{if .IsPointer}}*{{end}}{{.PackagePrefix}}{{.StructName}}
+	{{end}}
+	
+	{{range .SliceBindings}}
+	SliceOf{{.InterfaceName}} []{{.InterfacePrefix}}{{.InterfaceName}}
 	{{end}}
 }
 
@@ -75,6 +87,9 @@ func InitializeContainer() (*FloraContainer, error) {
 		{{end}}
 		{{range .Bindings}}
 		wire.Bind(new({{.InterfacePrefix}}{{.InterfaceName}}), new({{if .IsPointer}}*{{end}}{{.ComponentPrefix}}{{.StructName}})),
+		{{end}}
+		{{range .SliceBindings}}
+		ProvideSliceOf{{.InterfaceName}},
 		{{end}}
 		wire.Struct(new(FloraContainer), "*"),
 	)
@@ -97,17 +112,30 @@ type bindingData struct {
 	IsPointer       bool
 }
 
-type templateData struct {
-	PackageName string
-	Imports     []string
-	Providers   []providerData
-	Bindings    []bindingData
+type sliceImplData struct {
+	ParamName  string
+	TypePrefix string
+	StructName string
 }
 
-func (g *WireGenerator) Generate(outDir string, components []*engine.ComponentMetadata) error {
+type sliceBindingData struct {
+	InterfacePrefix string
+	InterfaceName   string
+	Implementations []sliceImplData
+}
+
+type templateData struct {
+	PackageName   string
+	Imports       []string
+	Providers     []providerData
+	Bindings      []bindingData
+	SliceBindings []sliceBindingData
+}
+
+func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext) error {
 	log := slog.With("pkg", "wiregen")
 
-	if len(components) == 0 {
+	if len(genCtx.Components) == 0 && len(genCtx.SliceBindings) == 0 {
 		log.Debug("No components provided, skipping generation")
 		return nil
 	}
@@ -140,7 +168,7 @@ func (g *WireGenerator) Generate(outDir string, components []*engine.ComponentMe
 	importSet := make(map[string]bool)
 	var bindings []bindingData
 
-	for _, comp := range components {
+	for _, comp := range genCtx.Components {
 		compPrefix := ""
 		if comp.PackageName != pkgName {
 			if comp.PackageName == "main" {
@@ -177,7 +205,40 @@ func (g *WireGenerator) Generate(outDir string, components []*engine.ComponentMe
 		}
 	}
 
+	var sliceBindingsData []sliceBindingData
+	for _, sb := range genCtx.SliceBindings {
+		ifacePrefix := ""
+		if sb.Interface.PackageName != pkgName && sb.Interface.PackageName != "main" {
+			ifacePrefix = sb.Interface.PackageName + "."
+			importSet[sb.Interface.PackagePath] = true
+		}
+
+		var impls []sliceImplData
+		for i, impl := range sb.Implementations {
+			typePrefix := ""
+			if impl.IsPointer {
+				typePrefix = "*"
+			}
+			if impl.PackageName != pkgName && impl.PackageName != "main" {
+				typePrefix += impl.PackageName + "."
+				importSet[impl.PackagePath] = true
+			}
+			impls = append(impls, sliceImplData{
+				ParamName:  fmt.Sprintf("p%d", i),
+				TypePrefix: typePrefix,
+				StructName: impl.StructName,
+			})
+		}
+
+		sliceBindingsData = append(sliceBindingsData, sliceBindingData{
+			InterfacePrefix: ifacePrefix,
+			InterfaceName:   sb.Interface.InterfaceName,
+			Implementations: impls,
+		})
+	}
+
 	data.Providers = providers
+	data.SliceBindings = sliceBindingsData
 
 	for imp := range importSet {
 		data.Imports = append(data.Imports, imp)
