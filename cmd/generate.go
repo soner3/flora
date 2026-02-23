@@ -31,8 +31,8 @@ var outDir string
 var generateCmd = &cobra.Command{
 	Use:          "generate",
 	Aliases:      []string{"gen"},
-	Short:        "Generate weld files",
-	Long:         `Generate weld files from the given directory.`,
+	Short:        "Generate flora files",
+	Long:         `Generate flora files from the given directory.`,
 	SilenceUsage: true,
 
 	PreRunE: func(cmd *cobra.Command, args []string) error {
