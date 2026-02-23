@@ -55,5 +55,5 @@ var generateCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(generateCmd)
 	generateCmd.Flags().StringVarP(&dir, "dir", "d", ".", "Directory to scan")
-	generateCmd.Flags().StringVarP(&outDir, "out", "o", "weld", "Output directory for the generated container")
+	generateCmd.Flags().StringVarP(&outDir, "out", "o", "flora", "Output directory for the generated container")
 }
