@@ -100,3 +100,70 @@ func TestParseComponents(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateConstructor(t *testing.T) {
+
+	testcases := []struct {
+		name         string
+		testdataPath string
+		expErr       error
+	}{
+		{
+			name:         "TestValidateConstructorSuccessful",
+			testdataPath: "testdata/happy",
+			expErr:       nil,
+		},
+		{
+			name:         "TestParseComponentsTooManyReturns",
+			testdataPath: "testdata/err_too_many_returns",
+			expErr:       ErrInvalidConstructor,
+		},
+		{
+			name:         "TestParseComponentsTwoReturnsWrongSecond",
+			testdataPath: "testdata/err_two_returns_wrong_second",
+			expErr:       ErrInvalidConstructor,
+		},
+		{
+			name:         "TestParseComponentsThreeReturnsWrongSecond",
+			testdataPath: "testdata/err_three_returns_wrong_second",
+			expErr:       ErrInvalidConstructor,
+		},
+		{
+			name:         "TestParseComponentsThreeReturnsWrongThird",
+			testdataPath: "testdata/err_three_returns_wrong_third",
+			expErr:       ErrInvalidConstructor,
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			packages, err := ScanPackages(tc.testdataPath)
+
+			if err != nil {
+				t.Fatalf("ScanPackages failed: %v", err)
+			}
+
+			genCtx, err := ParseComponents(packages)
+
+			if tc.expErr != nil {
+				if !errors.Is(err, tc.expErr) {
+					t.Errorf("expected error %v, got %v", tc.expErr, err)
+				}
+
+			} else {
+				if err != nil {
+					t.Errorf("ParseComponents failed: %v", err)
+				}
+
+				if len(genCtx.Components) < 1 {
+					t.Errorf("ParseComponents returned no components")
+				}
+
+				if len(genCtx.SliceBindings) < 1 {
+					t.Errorf("ParseComponents returned no slice bindings")
+				}
+			}
+
+		})
+	}
+}

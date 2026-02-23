@@ -25,10 +25,12 @@ type PostgresRepository struct {
 	cfg             config.Config
 }
 
-func NewPostgresRepository(cfg config.Config) *PostgresRepository {
+func NewPostgresRepository(cfg config.Config) (*PostgresRepository, func(), error) {
 	return &PostgresRepository{
-		cfg: cfg,
-	}
+			cfg: cfg,
+		}, func() {
+			println("Closing PostgresRepository")
+		}, nil
 }
 
 func (r *PostgresRepository) GetUserName() string {

@@ -85,13 +85,11 @@ func ParseComponents(pkgs []*packages.Package) (*engine.GeneratorContext, error)
 
 						sig := funcObj.Type().(*types.Signature)
 
-						results := sig.Results()
-
-						if results.Len() == 0 {
-							chainErr := fmt.Errorf("%w: %v", ErrInvalidConstructor, results)
-							return nil, errs.Wrap(chainErr, "invalid constructor: '%s' for component '%s' in package '%s' must return at least one value",
-								metadata.ConstructorName, metadata.StructName, pkg.Name)
+						if err := validateConstructor(sig, metadata.ConstructorName, metadata.StructName, metadata.PackageName); err != nil {
+							return nil, err
 						}
+
+						results := sig.Results()
 
 						retType := results.At(0).Type()
 						var baseRetType types.Type
@@ -279,4 +277,48 @@ func parseFloraTag(rawTag string, metadata *engine.ComponentMetadata) {
 		}
 	}
 
+}
+
+func isCleanupFunc(t types.Type) bool {
+	sig, ok := t.(*types.Signature)
+	if !ok {
+		return false
+	}
+	return sig.Params().Len() == 0 && sig.Results().Len() == 0
+}
+
+func validateConstructor(sig *types.Signature, constructorName, structName, pkgName string) error {
+	results := sig.Results()
+	numResults := results.Len()
+
+	if numResults == 0 || numResults > 3 {
+		chainErr := fmt.Errorf("%w: %v", ErrInvalidConstructor, results)
+		return errs.Wrap(chainErr, "invalid constructor: '%s' for component '%s' in package '%s' must return 1, 2, or 3 values",
+			constructorName, structName, pkgName)
+	}
+
+	if numResults == 2 {
+		secondType := results.At(1).Type()
+		isErr := secondType.String() == "error"
+		isCleanup := isCleanupFunc(secondType)
+		if !isErr && !isCleanup {
+			chainErr := fmt.Errorf("%w: %v", ErrInvalidConstructor, secondType)
+			return errs.Wrap(chainErr, "invalid constructor: '%s' for component '%s': 2nd return value must be 'error' or 'func()'", constructorName, structName)
+		}
+	}
+
+	if numResults == 3 {
+		secondType := results.At(1).Type()
+		thirdType := results.At(2).Type()
+		if !isCleanupFunc(secondType) {
+			chainErr := fmt.Errorf("%w: %v", ErrInvalidConstructor, secondType)
+			return errs.Wrap(chainErr, "invalid constructor: '%s' for component '%s': 2nd return value must be 'func()' when returning 3 values", constructorName, structName)
+		}
+		if thirdType.String() != "error" {
+			chainErr := fmt.Errorf("%w: %v", ErrInvalidConstructor, thirdType)
+			return errs.Wrap(chainErr, "invalid constructor: '%s' for component '%s': 3rd return value must be 'error' when returning 3 values", constructorName, structName)
+		}
+	}
+
+	return nil
 }

@@ -80,7 +80,7 @@ type FloraContainer struct {
 	{{end}}
 }
 
-func InitializeContainer() (*FloraContainer, error) {
+func InitializeContainer() (*FloraContainer, func(), error) {
 	wire.Build(
 		{{range .Providers}}
 		{{.PackagePrefix}}{{.ConstructorName}},
@@ -93,7 +93,7 @@ func InitializeContainer() (*FloraContainer, error) {
 		{{end}}
 		wire.Struct(new(FloraContainer), "*"),
 	)
-	return nil, nil
+	return nil, nil, nil
 }
 `
 

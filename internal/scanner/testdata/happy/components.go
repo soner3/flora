@@ -85,3 +85,21 @@ type PluginManager struct {
 }
 
 func NewPluginManager(plugins []Plugin) *PluginManager { return nil }
+
+type ComponentWithErr struct {
+	flora.Component
+}
+
+func NewComponentWithErr() (*ComponentWithErr, error) { return nil, nil }
+
+type ComponentWithCleanup struct {
+	flora.Component
+}
+
+func NewComponentWithCleanup() (*ComponentWithCleanup, func()) { return nil, nil }
+
+type ComponentWithBoth struct {
+	flora.Component
+}
+
+func NewComponentWithBoth() (*ComponentWithBoth, func(), error) { return nil, nil, nil }

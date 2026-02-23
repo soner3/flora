@@ -13,16 +13,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package main
+package errthreereturnswrongthird
 
-func main() {
-	// container, err := InitializeContainer()
-	// if err != nil {
-	// 	fmt.Printf("Failed to initialize DI container: %v\n", err)
-	// 	os.Exit(1)
-	// }
+import "github.com/soner3/flora"
 
-	// container.UserService.PrintUser()
+type Bad struct{ flora.Component }
 
-	// container.PluginManager.RunAll()
-}
+func NewBad() (*Bad, func(), string) { return nil, nil, "" }

@@ -16,9 +16,12 @@ import (
 
 // Injectors from flora_injector.go:
 
-func InitializeContainer() (*FloraContainer, error) {
+func InitializeContainer() (*FloraContainer, func(), error) {
 	configConfig := config.NewConfig()
-	postgresRepository := postgres.NewPostgresRepository(configConfig)
+	postgresRepository, cleanup, err := postgres.NewPostgresRepository(configConfig)
+	if err != nil {
+		return nil, nil, err
+	}
 	userService := domain.BuildUserService(postgresRepository, configConfig)
 	mysqlRepository := mysql.NewMysqlRepository(configConfig)
 	loggerPlugin := plugin.NewLoggerPlugin()
@@ -29,13 +32,15 @@ func InitializeContainer() (*FloraContainer, error) {
 		Config:             configConfig,
 		UserService:        userService,
 		MysqlRepository:    mysqlRepository,
-		PostgresRepository: postgresRepository,
 		LoggerPlugin:       loggerPlugin,
 		MetricsPlugin:      metricsPlugin,
 		PluginManager:      pluginManager,
+		PostgresRepository: postgresRepository,
 		SliceOfPlugin:      v,
 	}
-	return floraContainer, nil
+	return floraContainer, func() {
+		cleanup()
+	}, nil
 }
 
 // flora_injector.go:
@@ -53,13 +58,13 @@ type FloraContainer struct {
 
 	MysqlRepository *mysql.MysqlRepository
 
-	PostgresRepository *postgres.PostgresRepository
-
 	LoggerPlugin *plugin.LoggerPlugin
 
 	MetricsPlugin *plugin.MetricsPlugin
 
 	PluginManager *plugin.PluginManager
+
+	PostgresRepository *postgres.PostgresRepository
 
 	SliceOfPlugin []plugin.Plugin
 }
