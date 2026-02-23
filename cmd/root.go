@@ -29,7 +29,7 @@ var logLevel string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "weld",
+	Use:   "flora",
 	Short: "Compile-time Dependency Injection for Go",
 	Long: `A longer description that spans multiple lines and likely contains
 examples and usage of using your application. For example:
@@ -50,9 +50,9 @@ to quickly create a Cobra application.`,
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		if weldErr, ok := err.(*errs.FloraError); ok {
-			slog.Error(weldErr.Error(), "id", weldErr.ID)
-			slog.Debug("Error Stacktrace", "trace", weldErr.StackTrace)
+		if floraErr, ok := err.(*errs.FloraError); ok {
+			slog.Error(floraErr.Error(), "id", floraErr.ID)
+			slog.Debug("Error Stacktrace", "trace", floraErr.StackTrace)
 		} else {
 			slog.Error(err.Error())
 		}
@@ -66,7 +66,7 @@ func init() {
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 
-	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.weld.yaml)")
+	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.flora.yaml)")
 	rootCmd.PersistentFlags().StringVarP(&logLevel, "log-level", "l", "info", "Log level (debug, info, warn, error)")
 
 	// Cobra also supports local flags, which will only run
