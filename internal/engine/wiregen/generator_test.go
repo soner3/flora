@@ -33,9 +33,9 @@ func TestGenerate(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ScanPackages failed: %v", err)
 		}
-		genCtx, err := scanner.ParseComponents(packages)
+		genCtx, err := scanner.ParsePackages(packages)
 		if err != nil {
-			t.Fatalf("ParseComponents failed: %v", err)
+			t.Fatalf("ParsePkgs failed: %v", err)
 		}
 		return genCtx
 	}

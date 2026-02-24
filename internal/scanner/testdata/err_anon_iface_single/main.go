@@ -13,7 +13,15 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package flora
+package erranonifacesingle
 
-// Component is a marker struct that is embedded in components.
-type Component struct{}
+import "github.com/soner3/flora"
+
+type Impl struct{ flora.Component }
+
+func NewImpl() *Impl { return nil }
+func (i *Impl) Do()  {}
+
+type Bad struct{ flora.Component }
+
+func NewBad(req interface{ Do() }) *Bad { return nil }

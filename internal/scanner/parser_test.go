@@ -17,153 +17,154 @@ package scanner
 
 import (
 	"errors"
+	"go/types"
 	"testing"
+
+	"golang.org/x/tools/go/packages"
 )
 
-func TestParseComponents(t *testing.T) {
+func TestParsePackages(t *testing.T) {
 	testcases := []struct {
 		name         string
 		testdataPath string
 		expErr       error
 	}{
+		// --- Erfolgsfall ---
 		{
-			name:         "TestParseComponentsSuccessful",
+			name:         "TestParsePackagesSuccessful",
 			testdataPath: "testdata/happy",
 			expErr:       nil,
 		},
+
+		// --- Provider / Constructor Fehler ---
 		{
-			name:         "TestParseComponentsMissingConstructor",
+			name:         "TestParsePackagesMissingProvider",
 			testdataPath: "testdata/err_no_constructor",
-			expErr:       ErrConstructorNotFound,
+			expErr:       ErrProviderFuncNotFound,
 		},
 		{
-			name:         "TestParseComponentsNotAFunc",
+			name:         "TestParsePackagesNotAFunc",
 			testdataPath: "testdata/err_not_func",
-			expErr:       ErrConstructorNotFunc,
+			expErr:       ErrInvalidProviderFunc,
 		},
 		{
-			name:         "TestParseComponentsNoReturn",
+			name:         "TestParsePackagesNoReturn",
 			testdataPath: "testdata/err_no_return",
-			expErr:       ErrInvalidConstructor,
+			expErr:       ErrInvalidProviderFunc,
 		},
 		{
-			name:         "TestParseComponentsWrongType",
+			name:         "TestParsePackagesWrongType",
 			testdataPath: "testdata/err_wrong_type",
-			expErr:       ErrInvalidConstructor,
+			expErr:       ErrInvalidProviderFunc,
 		},
 		{
-			name:         "TestParseComponentsNoImplementation",
+			name:         "TestParsePackagesTooManyReturns",
+			testdataPath: "testdata/err_too_many_returns",
+			expErr:       ErrInvalidProviderFunc,
+		},
+		{
+			name:         "TestParsePackagesTwoReturnsWrongSecond",
+			testdataPath: "testdata/err_two_returns_wrong_second",
+			expErr:       ErrInvalidProviderFunc,
+		},
+		{
+			name:         "TestParsePackagesThreeReturnsWrongSecond",
+			testdataPath: "testdata/err_three_returns_wrong_second",
+			expErr:       ErrInvalidProviderFunc,
+		},
+		{
+			name:         "TestParsePackagesThreeReturnsWrongThird",
+			testdataPath: "testdata/err_three_returns_wrong_third",
+			expErr:       ErrInvalidProviderFunc,
+		},
+
+		// --- Interface & Binding Fehler ---
+		{
+			name:         "TestParsePackagesNoImplementation",
 			testdataPath: "testdata/err_no_impl",
 			expErr:       ErrNoImplementation,
 		},
 		{
-			name:         "TestParseComponentsInterfaceCollisionNoPrimary",
+			name:         "TestParsePackagesInterfaceCollisionNoPrimary",
 			testdataPath: "testdata/err_collision_no_primary",
 			expErr:       ErrInterfaceCollision,
 		},
 		{
-			name:         "TestParseComponentsInterfaceCollisionMultiPrimary",
+			name:         "TestParsePackagesInterfaceCollisionMultiPrimary",
 			testdataPath: "testdata/err_collision_multi_primary",
 			expErr:       ErrInterfaceCollision,
 		},
-	}
-
-	for _, tc := range testcases {
-		t.Run(tc.name, func(t *testing.T) {
-			packages, err := ScanPackages(tc.testdataPath)
-
-			if err != nil {
-				t.Fatalf("ScanPackages failed: %v", err)
-			}
-
-			genCtx, err := ParseComponents(packages)
-
-			if tc.expErr != nil {
-				if !errors.Is(err, tc.expErr) {
-					t.Fatalf("expected error %v, got %v", tc.expErr, err)
-				}
-
-			} else {
-				if err != nil {
-					t.Fatalf("ParseComponents failed: %v", err)
-				}
-
-				if len(genCtx.Components) < 1 {
-					t.Fatalf("ParseComponents returned no components")
-				}
-
-				if len(genCtx.SliceBindings) < 1 {
-					t.Fatalf("ParseComponents returned no slice bindings")
-				}
-			}
-
-		})
-	}
-}
-
-func TestValidateConstructor(t *testing.T) {
-
-	testcases := []struct {
-		name         string
-		testdataPath string
-		expErr       error
-	}{
+		// --- Neue Edge Cases für 100% Coverage ---
 		{
-			name:         "TestValidateConstructorSuccessful",
-			testdataPath: "testdata/happy",
-			expErr:       nil,
+			name:         "TestParsePackagesAnonSlice",
+			testdataPath: "testdata/err_anon_slice",
+			expErr:       ErrInvalidSlice,
 		},
 		{
-			name:         "TestParseComponentsTooManyReturns",
-			testdataPath: "testdata/err_too_many_returns",
-			expErr:       ErrInvalidConstructor,
+			name:         "TestParsePackagesFirstReturnErr",
+			testdataPath: "testdata/err_first_return_err",
+			expErr:       ErrInvalidProviderFunc,
 		},
 		{
-			name:         "TestParseComponentsTwoReturnsWrongSecond",
-			testdataPath: "testdata/err_two_returns_wrong_second",
-			expErr:       ErrInvalidConstructor,
+			name:         "TestParsePackagesSelfReferential",
+			testdataPath: "testdata/err_self_ref",
+			expErr:       ErrInvalidProviderFunc,
 		},
 		{
-			name:         "TestParseComponentsThreeReturnsWrongSecond",
-			testdataPath: "testdata/err_three_returns_wrong_second",
-			expErr:       ErrInvalidConstructor,
+			name:         "TestParsePackagesAnonIfaceSingle",
+			testdataPath: "testdata/err_anon_iface_single",
+			expErr:       ErrInvalidInterface,
 		},
 		{
-			name:         "TestParseComponentsThreeReturnsWrongThird",
-			testdataPath: "testdata/err_three_returns_wrong_third",
-			expErr:       ErrInvalidConstructor,
+			name:         "TestParsePackagesAnonIfacePrimary",
+			testdataPath: "testdata/err_anon_iface_primary",
+			expErr:       ErrInvalidInterface,
 		},
 	}
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 			packages, err := ScanPackages(tc.testdataPath)
-
 			if err != nil {
 				t.Fatalf("ScanPackages failed: %v", err)
 			}
 
-			genCtx, err := ParseComponents(packages)
+			genCtx, err := ParsePackages(packages)
 
 			if tc.expErr != nil {
 				if !errors.Is(err, tc.expErr) {
 					t.Errorf("expected error %v, got %v", tc.expErr, err)
 				}
-
 			} else {
 				if err != nil {
-					t.Errorf("ParseComponents failed: %v", err)
+					t.Errorf("ParsePackages failed: %v", err)
 				}
 
 				if len(genCtx.Components) < 1 {
-					t.Errorf("ParseComponents returned no components")
+					t.Errorf("ParsePackages returned no components")
 				}
 
 				if len(genCtx.SliceBindings) < 1 {
-					t.Errorf("ParseComponents returned no slice bindings")
+					t.Errorf("ParsePackages returned no slice bindings")
 				}
 			}
-
 		})
+	}
+}
+
+func TestProcessComponent_UnknownMarker(t *testing.T) {
+	fakeComp := &componentInfo{
+		Marker: "some.unknown/marker.Component",
+		Name:   "FakeComponent",
+		Pkg:    &packages.Package{Name: "fake"},
+	}
+
+	neededIfaces := make(map[string]types.Type)
+	neededSlices := make(map[string]types.Type)
+
+	_, err := processComponent(fakeComp, &neededIfaces, &neededSlices)
+
+	if !errors.Is(err, ErrUnknownMarker) {
+		t.Errorf("expected ErrUnknownMarker, got %v", err)
 	}
 }

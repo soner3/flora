@@ -33,7 +33,7 @@ func RunGenerate(dir, outDir string) error {
 		return err
 	}
 
-	genCtx, err := scanner.ParseComponents(pkgs)
+	genCtx, err := scanner.ParsePackages(pkgs)
 	if err != nil {
 		return err
 	}

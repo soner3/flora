@@ -29,189 +29,74 @@ import (
 )
 
 var (
-	ErrConstructorNotFound = errors.New("constructor not found")
-	ErrConstructorNotFunc  = errors.New("constructor is not a function")
-	ErrInvalidConstructor  = errors.New("invalid constructor")
-	ErrInterfaceCollision  = errors.New("interface collision")
-	ErrNoImplementation    = errors.New("no component implements interface")
+	ErrProviderFuncNotFound = errors.New("provider not found")
+	ErrInvalidProviderFunc  = errors.New("invalid provider func")
+	ErrUnknownMarker        = errors.New("unknown marker")
+	ErrInterfaceCollision   = errors.New("interface collision")
+	ErrInvalidInterface     = errors.New("invalid interface")
+	ErrNoImplementation     = errors.New("no component implements interface")
+	ErrInvalidSlice         = errors.New("invalid slice")
 )
+
+const (
+	ComponentMarker = "github.com/soner3/flora.Component"
+)
+
+var markers = []string{
+	ComponentMarker,
+}
 
 type scannedComponent struct {
 	Metadata *engine.ComponentMetadata
 	PtrType  *types.Pointer
 }
 
-func ParseComponents(pkgs []*packages.Package) (*engine.GeneratorContext, error) {
-	log := slog.With("pkg", "scanner")
+type componentInfo struct {
+	Pkg        *packages.Package
+	Name       string
+	TypeName   *types.TypeName
+	StructType *types.Struct
+	Marker     string
+	Tag        string
+}
+
+var log = slog.With("pkg", "scanner")
+
+// ParsePackages parses the given packages and returns a GeneratorContext
+// containing the parsed components and slice bindings
+func ParsePackages(pkgs []*packages.Package) (*engine.GeneratorContext, error) {
 	log.Debug("Parsing components from packages", "package_count", len(pkgs))
 
-	var components []scannedComponent
+	compInfos := parseMarkedComponents(pkgs)
+
+	log.Debug("Marked components found", "count", len(*compInfos))
+
 	neededInterfaces := make(map[string]types.Type)
 	neededSlices := make(map[string]types.Type)
+	scannedComponents := make([]*scannedComponent, 0)
 
-	for _, pkg := range pkgs {
-		scope := pkg.Types.Scope()
-		for _, name := range scope.Names() {
-			obj := scope.Lookup(name)
-			if typeName, ok := obj.(*types.TypeName); ok {
-				if structType, ok := typeName.Type().Underlying().(*types.Struct); ok {
-					isComponent, rawTag := getFloraComponentInfo(structType)
-
-					if isComponent {
-						metadata := &engine.ComponentMetadata{
-							PackageName: pkg.Name,
-							PackagePath: pkg.PkgPath,
-							StructName:  name,
-						}
-
-						parseFloraTag(rawTag, metadata)
-
-						log.Debug("Found component", "component", name, "package", pkg.Name, "constructor", metadata.ConstructorName)
-
-						constructorObj := scope.Lookup(metadata.ConstructorName)
-
-						if constructorObj == nil {
-							chainErr := fmt.Errorf("%w: %v", ErrConstructorNotFound, constructorObj)
-							return nil, errs.Wrap(chainErr, "constructor '%s' not found for component '%s' in package '%s'",
-								metadata.ConstructorName, metadata.StructName, pkg.Name)
-						}
-
-						funcObj, ok := constructorObj.(*types.Func)
-						if !ok {
-							chainErr := fmt.Errorf("%w: %v", ErrConstructorNotFunc, funcObj)
-							return nil, errs.Wrap(chainErr, "expected '%s' to be a function for component '%s', but it is a %T",
-								metadata.ConstructorName, metadata.StructName, constructorObj)
-						}
-
-						sig := funcObj.Type().(*types.Signature)
-
-						if err := validateConstructor(sig, metadata.ConstructorName, metadata.StructName, metadata.PackageName); err != nil {
-							return nil, err
-						}
-
-						results := sig.Results()
-
-						retType := results.At(0).Type()
-						var baseRetType types.Type
-
-						if ptr, isPtr := retType.(*types.Pointer); isPtr {
-							metadata.IsPointer = true
-							baseRetType = ptr.Elem()
-						} else {
-							metadata.IsPointer = false
-							baseRetType = retType
-						}
-
-						if !types.Identical(baseRetType, typeName.Type()) {
-							chainErr := fmt.Errorf("%w: %v", ErrInvalidConstructor, retType)
-							return nil, errs.Wrap(chainErr, "invalid constructor: '%s' returns '%s', but must return '%s' or '*%s'",
-								metadata.ConstructorName, retType.String(), metadata.StructName, metadata.StructName)
-						}
-
-						params := sig.Params()
-
-						for v := range params.Variables() {
-							paramType := v.Type()
-
-							if iface, isInterface := paramType.Underlying().(*types.Interface); isInterface {
-								if !iface.Empty() {
-									neededInterfaces[paramType.String()] = paramType
-								}
-							}
-
-							if sliceType, isSlice := paramType.(*types.Slice); isSlice {
-								elemType := sliceType.Elem()
-								if iface, isInterface := elemType.Underlying().(*types.Interface); isInterface {
-									if !iface.Empty() {
-										neededSlices[elemType.String()] = elemType
-									}
-								}
-							}
-						}
-
-						components = append(components, scannedComponent{
-							Metadata: metadata,
-							PtrType:  types.NewPointer(typeName.Type()),
-						})
-					}
-				}
-			}
+	for _, compInfo := range *compInfos {
+		scannedComp, err := processComponent(&compInfo, &neededInterfaces, &neededSlices)
+		if err != nil {
+			return nil, err
 		}
+		scannedComponents = append(scannedComponents, scannedComp)
 	}
 
 	log.Debug("Resolving interface implementations", "interfaces_needed", len(neededInterfaces))
-
-	for neededName, neededType := range neededInterfaces {
-		iface := neededType.Underlying().(*types.Interface)
-
-		var implementers []scannedComponent
-
-		for _, comp := range components {
-			if types.Implements(comp.PtrType, iface) {
-				implementers = append(implementers, comp)
-			}
-		}
-
-		if len(implementers) == 1 {
-			bindInterfaceToComponent(&implementers[0], neededType)
-			log.Debug("Bound interface to component", "interface", neededName, "component", implementers[0].Metadata.StructName)
-		} else if len(implementers) > 1 {
-			var primaryComp *scannedComponent
-			primaryCount := 0
-
-			for i, impl := range implementers {
-				if impl.Metadata.IsPrimary {
-					primaryCount++
-					primaryComp = &implementers[i]
-				}
-			}
-
-			switch primaryCount {
-			case 1:
-				bindInterfaceToComponent(primaryComp, neededType)
-				log.Debug("Bound interface to primary component", "interface", neededName, "component", primaryComp.Metadata.StructName)
-			case 0:
-				chainErr := fmt.Errorf("%w: %v", ErrInterfaceCollision, implementers)
-				return nil, errs.Wrap(chainErr, "interface collision: %d components implement injected interface '%s', but none is marked 'primary'", len(implementers), neededName)
-			default:
-				chainErr := fmt.Errorf("%w: %v", ErrInterfaceCollision, implementers)
-				return nil, errs.Wrap(chainErr, "interface collision: multiple components implementing '%s' are marked as 'primary'", neededName)
-			}
-
-		} else {
-			chainErr := fmt.Errorf("%w: %v", ErrNoImplementation, neededName)
-			return nil, errs.Wrap(chainErr, "no component found that implements interface '%s'", neededName)
-		}
+	if err := bindInterfacesToComponents(scannedComponents, neededInterfaces); err != nil {
+		return nil, err
 	}
 
 	log.Debug("Resolving slice bindings", "slices_needed", len(neededSlices))
-	var sliceBindings []*engine.SliceBindingMetadata
 
-	for neededName, neededType := range neededSlices {
-		iface := neededType.Underlying().(*types.Interface)
-		var implementers []*engine.ComponentMetadata
-
-		for _, comp := range components {
-			if types.Implements(comp.PtrType, iface) {
-				implementers = append(implementers, comp.Metadata)
-			}
-		}
-
-		if named, ok := neededType.(*types.Named); ok {
-			sliceBindings = append(sliceBindings, &engine.SliceBindingMetadata{
-				Interface: engine.InterfaceMetadata{
-					PackageName:   named.Obj().Pkg().Name(),
-					PackagePath:   named.Obj().Pkg().Path(),
-					InterfaceName: named.Obj().Name(),
-				},
-				Implementations: implementers,
-			})
-			log.Debug("Resolved slice binding", "interface", neededName, "implementations_count", len(implementers))
-		}
+	sliceBindings, err := bindSlicesToComponents(scannedComponents, neededSlices)
+	if err != nil {
+		return nil, err
 	}
 
 	var finalMetadata []*engine.ComponentMetadata
-	for _, comp := range components {
+	for _, comp := range scannedComponents {
 		finalMetadata = append(finalMetadata, comp.Metadata)
 	}
 
@@ -221,28 +106,56 @@ func ParseComponents(pkgs []*packages.Package) (*engine.GeneratorContext, error)
 		Components:    finalMetadata,
 		SliceBindings: sliceBindings,
 	}, nil
+
 }
 
-func bindInterfaceToComponent(comp *scannedComponent, ifaceType types.Type) {
-	if named, ok := ifaceType.(*types.Named); ok {
-		comp.Metadata.Implements = append(comp.Metadata.Implements, engine.InterfaceMetadata{
-			PackageName:   named.Obj().Pkg().Name(),
-			PackagePath:   named.Obj().Pkg().Path(),
-			InterfaceName: named.Obj().Name(),
-		})
-	}
-}
+// parseMarkedComponents finds all components in the given packages that are marked with the flora markers
+func parseMarkedComponents(pkgs []*packages.Package) *[]componentInfo {
 
-func getFloraComponentInfo(structType *types.Struct) (bool, string) {
-	for i := 0; i < structType.NumFields(); i++ {
-		field := structType.Field(i)
-		if field.Anonymous() && field.Type().String() == "github.com/soner3/flora.Component" {
-			return true, structType.Tag(i)
+	components := make([]componentInfo, 0)
+
+	for _, pkg := range pkgs {
+		scope := pkg.Types.Scope()
+		for _, name := range scope.Names() {
+			obj := scope.Lookup(name)
+			if typeName, ok := obj.(*types.TypeName); ok {
+				if structType, ok := typeName.Type().Underlying().(*types.Struct); ok {
+					isComponent, marker, tag := isMarkedWith(structType)
+
+					if isComponent {
+						components = append(components, componentInfo{
+							Pkg:        pkg,
+							Name:       name,
+							TypeName:   typeName,
+							StructType: structType,
+							Marker:     marker,
+							Tag:        tag,
+						})
+					}
+				}
+			}
 		}
 	}
-	return false, ""
+
+	return &components
 }
 
+// isMarkedWith checks if the struct is marked with any of the flora markers
+// and returns the marker and tag
+func isMarkedWith(structType *types.Struct) (bool, string, string) {
+	for i := 0; i < structType.NumFields(); i++ {
+		field := structType.Field(i)
+		for _, marker := range markers {
+			if field.Anonymous() && field.Type().String() == marker {
+				return true, marker, structType.Tag(i)
+			}
+		}
+
+	}
+	return false, "", ""
+}
+
+// parseFloraTag parses the flora tag and sets the metadata accordingly
 func parseFloraTag(rawTag string, metadata *engine.ComponentMetadata) {
 	metadata.ConstructorName = "New" + metadata.StructName
 	metadata.IsPrimary = false
@@ -279,6 +192,164 @@ func parseFloraTag(rawTag string, metadata *engine.ComponentMetadata) {
 
 }
 
+// processComponent processes a component and returns a scannedComponent
+func processComponent(compInfo *componentInfo, neededInterfaces, neededSlices *map[string]types.Type) (*scannedComponent, error) {
+	metadata := &engine.ComponentMetadata{
+		StructName:  compInfo.Name,
+		PackageName: compInfo.Pkg.Name,
+		PackagePath: compInfo.Pkg.PkgPath,
+	}
+
+	switch compInfo.Marker {
+	case ComponentMarker:
+		parseFloraTag(compInfo.Tag, metadata)
+
+		obj := compInfo.Pkg.Types.Scope().Lookup(metadata.ConstructorName)
+
+		err := processProviderFunc(compInfo, metadata, obj, neededInterfaces, neededSlices)
+		if err != nil {
+			return nil, err
+		}
+
+		return &scannedComponent{
+			Metadata: metadata,
+			PtrType:  types.NewPointer(compInfo.TypeName.Type()),
+		}, nil
+	default:
+		chainErr := fmt.Errorf("%w: %v", ErrUnknownMarker, compInfo.Marker)
+		return nil, errs.Wrap(chainErr, "unknown marker '%s' for component '%s' in package '%s'",
+			compInfo.Marker, compInfo.Name, compInfo.Pkg.Name)
+	}
+
+}
+
+// processProviderFunc validates the provider function and populates
+// the needed interfaces and slices in compInfo
+func processProviderFunc(compInfo *componentInfo, metadata *engine.ComponentMetadata, obj types.Object, neededInterfaces, neededSlices *map[string]types.Type) error {
+
+	sig, err := validateProviderFunc(compInfo, metadata, obj)
+	if err != nil {
+		return err
+	}
+
+	for v := range sig.Params().Variables() {
+		paramType := v.Type()
+
+		if iface, isInterface := paramType.Underlying().(*types.Interface); isInterface {
+			if !iface.Empty() {
+				(*neededInterfaces)[paramType.String()] = paramType
+			}
+		}
+
+		if sliceType, isSlice := paramType.(*types.Slice); isSlice {
+			elemType := sliceType.Elem()
+			if iface, isInterface := elemType.Underlying().(*types.Interface); isInterface {
+				if !iface.Empty() {
+					(*neededSlices)[elemType.String()] = elemType
+				}
+			}
+		}
+
+	}
+
+	return nil
+}
+
+// validateProviderFunc validates the object is a provider function and
+// returns the signature if valid
+func validateProviderFunc(compInfo *componentInfo, metadata *engine.ComponentMetadata, obj types.Object) (*types.Signature, error) {
+
+	if obj == nil {
+		chainErr := fmt.Errorf("%w: %v", ErrProviderFuncNotFound, obj)
+		return nil, errs.Wrap(chainErr, "provider '%s' not found for component '%s' in package '%s'",
+			metadata.ConstructorName, metadata.StructName, metadata.PackageName)
+	}
+
+	funcObj, ok := obj.(*types.Func)
+	if !ok {
+		chainErr := fmt.Errorf("%w: %v", ErrInvalidProviderFunc, funcObj)
+		return nil, errs.Wrap(chainErr, "expected '%s' to be a function for component '%s', but it is a %T",
+			metadata.ConstructorName, metadata.StructName, obj)
+	}
+
+	sig := funcObj.Type().(*types.Signature)
+	results := sig.Results()
+	numResults := results.Len()
+
+	if numResults == 0 || numResults > 3 {
+		chainErr := fmt.Errorf("%w: %v", ErrInvalidProviderFunc, results)
+		return nil, errs.Wrap(chainErr, "invalid provider func: '%s' for component '%s' in package '%s' must return 1, 2, or 3 values",
+			metadata.ConstructorName, metadata.StructName, metadata.PackageName)
+	}
+
+	firstType := results.At(0).Type()
+	if firstType.String() == "error" || isCleanupFunc(firstType) {
+		chainErr := fmt.Errorf("%w: %v", ErrInvalidProviderFunc, firstType)
+		return nil, errs.Wrap(chainErr, "invalid provider func: '%s' for component '%s': 1st return value must neither be 'error' nor 'func()''", metadata.ConstructorName, metadata.StructName)
+	}
+
+	if numResults == 2 {
+		secondType := results.At(1).Type()
+		isErr := secondType.String() == "error"
+		isCleanup := isCleanupFunc(secondType)
+		if !isErr && !isCleanup {
+			chainErr := fmt.Errorf("%w: %v", ErrInvalidProviderFunc, secondType)
+			return nil, errs.Wrap(chainErr, "invalid provider func: '%s' for component '%s': 2nd return value must be 'error' or 'func()'", metadata.ConstructorName, metadata.StructName)
+		}
+	}
+
+	if numResults == 3 {
+		secondType := results.At(1).Type()
+		if !isCleanupFunc(secondType) {
+			chainErr := fmt.Errorf("%w: %v", ErrInvalidProviderFunc, secondType)
+			return nil, errs.Wrap(chainErr, "invalid provider func: '%s' for component '%s': 2nd return value must be 'func()' when returning 3 values", metadata.ConstructorName, metadata.StructName)
+		}
+		thirdType := results.At(2).Type()
+		if thirdType.String() != "error" {
+			chainErr := fmt.Errorf("%w: %v", ErrInvalidProviderFunc, thirdType)
+			return nil, errs.Wrap(chainErr, "invalid provider func: '%s' for component '%s': 3rd return value must be 'error' when returning 3 values", metadata.ConstructorName, metadata.StructName)
+		}
+	}
+
+	var baseRetType types.Type
+
+	if ptr, isPtr := firstType.(*types.Pointer); isPtr {
+		metadata.IsPointer = true
+		baseRetType = ptr.Elem()
+	} else {
+		metadata.IsPointer = false
+		baseRetType = firstType
+	}
+
+	if !types.Identical(baseRetType, compInfo.TypeName.Type()) {
+		chainErr := fmt.Errorf("%w: %v", ErrInvalidProviderFunc, firstType)
+		return nil, errs.Wrap(chainErr, "invalid provider func: '%s' returns '%s', but must return '%s' or '*%s'",
+			metadata.ConstructorName, firstType.String(), compInfo.TypeName.Name(), compInfo.TypeName.Name())
+	}
+
+	params := sig.Params()
+
+	for v := range params.Variables() {
+		paramType := v.Type()
+		var baseParamType types.Type
+
+		if ptr, isPtr := paramType.(*types.Pointer); isPtr {
+			baseParamType = ptr.Elem()
+		} else {
+			baseParamType = paramType
+		}
+
+		if types.Identical(baseParamType, compInfo.TypeName.Type()) {
+			chainErr := fmt.Errorf("%w: %v", ErrInvalidProviderFunc, paramType)
+			return nil, errs.Wrap(chainErr, "circular dependency: provider func '%s' for component '%s' cannot require its own type as a parameter",
+				metadata.ConstructorName, metadata.StructName)
+		}
+	}
+
+	return sig, nil
+}
+
+// isCleanupFunc checks if the type is a cleanup function (func())
 func isCleanupFunc(t types.Type) bool {
 	sig, ok := t.(*types.Signature)
 	if !ok {
@@ -287,38 +358,100 @@ func isCleanupFunc(t types.Type) bool {
 	return sig.Params().Len() == 0 && sig.Results().Len() == 0
 }
 
-func validateConstructor(sig *types.Signature, constructorName, structName, pkgName string) error {
-	results := sig.Results()
-	numResults := results.Len()
+// bindInterfacesToComponents binds the needed interfaces to the components that implement them
+func bindInterfacesToComponents(components []*scannedComponent, neededInterfaces map[string]types.Type) error {
+	for neededName, neededType := range neededInterfaces {
+		iface := neededType.Underlying().(*types.Interface)
 
-	if numResults == 0 || numResults > 3 {
-		chainErr := fmt.Errorf("%w: %v", ErrInvalidConstructor, results)
-		return errs.Wrap(chainErr, "invalid constructor: '%s' for component '%s' in package '%s' must return 1, 2, or 3 values",
-			constructorName, structName, pkgName)
-	}
+		var implementers []*scannedComponent
 
-	if numResults == 2 {
-		secondType := results.At(1).Type()
-		isErr := secondType.String() == "error"
-		isCleanup := isCleanupFunc(secondType)
-		if !isErr && !isCleanup {
-			chainErr := fmt.Errorf("%w: %v", ErrInvalidConstructor, secondType)
-			return errs.Wrap(chainErr, "invalid constructor: '%s' for component '%s': 2nd return value must be 'error' or 'func()'", constructorName, structName)
+		for _, comp := range components {
+			if types.Implements(comp.PtrType, iface) {
+				implementers = append(implementers, comp)
+			}
+		}
+
+		bindToComp := func(comp *scannedComponent, ifaceType types.Type) error {
+			if named, ok := ifaceType.(*types.Named); ok {
+				comp.Metadata.Implements = append(comp.Metadata.Implements, engine.InterfaceMetadata{
+					PackageName:   named.Obj().Pkg().Name(),
+					PackagePath:   named.Obj().Pkg().Path(),
+					InterfaceName: named.Obj().Name(),
+				})
+				log.Debug("Bound interface to component", "interface", neededName, "component", implementers[0].Metadata.StructName)
+
+			} else {
+				chainErr := fmt.Errorf("%w: %v", ErrInvalidInterface, ifaceType)
+				return errs.Wrap(chainErr, "cannot bind anonymous interface '%s' to component '%s' in package '%s': only named interfaces are supported",
+					ifaceType.String(), comp.Metadata.StructName, comp.Metadata.PackageName)
+			}
+			return nil
+		}
+
+		if len(implementers) == 1 {
+			if err := bindToComp(implementers[0], neededType); err != nil {
+				return err
+			}
+		} else if len(implementers) > 1 {
+			var primaryComp *scannedComponent
+			primaryCount := 0
+
+			for i, impl := range implementers {
+				if impl.Metadata.IsPrimary {
+					primaryCount++
+					primaryComp = implementers[i]
+				}
+			}
+
+			switch primaryCount {
+			case 1:
+				if err := bindToComp(primaryComp, neededType); err != nil {
+					return err
+				}
+			case 0:
+				chainErr := fmt.Errorf("%w: %v", ErrInterfaceCollision, implementers)
+				return errs.Wrap(chainErr, "interface collision: %d components implement injected interface '%s', but none is marked 'primary'", len(implementers), neededName)
+			default:
+				chainErr := fmt.Errorf("%w: %v", ErrInterfaceCollision, implementers)
+				return errs.Wrap(chainErr, "interface collision: multiple components implementing '%s' are marked as 'primary'", neededName)
+			}
+
+		} else {
+			chainErr := fmt.Errorf("%w: %v", ErrNoImplementation, neededName)
+			return errs.Wrap(chainErr, "no component found that implements interface '%s'", neededName)
 		}
 	}
-
-	if numResults == 3 {
-		secondType := results.At(1).Type()
-		thirdType := results.At(2).Type()
-		if !isCleanupFunc(secondType) {
-			chainErr := fmt.Errorf("%w: %v", ErrInvalidConstructor, secondType)
-			return errs.Wrap(chainErr, "invalid constructor: '%s' for component '%s': 2nd return value must be 'func()' when returning 3 values", constructorName, structName)
-		}
-		if thirdType.String() != "error" {
-			chainErr := fmt.Errorf("%w: %v", ErrInvalidConstructor, thirdType)
-			return errs.Wrap(chainErr, "invalid constructor: '%s' for component '%s': 3rd return value must be 'error' when returning 3 values", constructorName, structName)
-		}
-	}
-
 	return nil
+}
+
+// bindSlicesToComponents binds the needed slices to the components that implement them
+func bindSlicesToComponents(components []*scannedComponent, neededSlices map[string]types.Type) ([]*engine.SliceBindingMetadata, error) {
+	var sliceBindings []*engine.SliceBindingMetadata
+
+	for neededName, neededType := range neededSlices {
+		iface := neededType.Underlying().(*types.Interface)
+		var implementers []*engine.ComponentMetadata
+
+		for _, comp := range components {
+			if types.Implements(comp.PtrType, iface) {
+				implementers = append(implementers, comp.Metadata)
+			}
+		}
+
+		if named, ok := neededType.(*types.Named); ok {
+			sliceBindings = append(sliceBindings, &engine.SliceBindingMetadata{
+				Interface: engine.InterfaceMetadata{
+					PackageName:   named.Obj().Pkg().Name(),
+					PackagePath:   named.Obj().Pkg().Path(),
+					InterfaceName: named.Obj().Name(),
+				},
+				Implementations: implementers,
+			})
+			log.Debug("Resolved slice binding", "interface", neededName, "implementations_count", len(implementers))
+		} else {
+			chainErr := fmt.Errorf("%w: %v", ErrInvalidSlice, neededType)
+			return nil, errs.Wrap(chainErr, "cannot bind anonymous slice '%s': only named slices and interfaces are supported", neededType.String())
+		}
+	}
+	return sliceBindings, nil
 }
