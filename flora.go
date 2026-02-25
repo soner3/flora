@@ -16,4 +16,10 @@ limitations under the License.
 package flora
 
 // Component is a marker struct that is embedded in components.
+// It allows Flora to auto-discover and wire the struct using tags.
 type Component struct{}
+
+// Configuration is a marker struct that is embedded in configuration classes.
+// Flora will scan all methods of a Configuration struct and register them as
+// providers. Methods can be configured using magic comments (e.g., // flora:primary).
+type Configuration struct{}
