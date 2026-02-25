@@ -12,38 +12,70 @@ import (
 	"github.com/soner3/flora/example/mysql"
 	"github.com/soner3/flora/example/plugin"
 	"github.com/soner3/flora/example/postgres"
+	"github.com/soner3/flora/example/report"
 )
 
 // Injectors from flora_injector.go:
 
 func InitializeContainer() (*FloraContainer, func(), error) {
 	configConfig := config.NewConfig()
+	v := ProvidePrototypePdfGeneratorAsDocumentGenerator(configConfig)
+	reportService := domain.NewReportService(v)
 	postgresRepository, cleanup, err := postgres.NewPostgresRepository(configConfig)
 	if err != nil {
 		return nil, nil, err
 	}
 	userService := domain.BuildUserService(postgresRepository, configConfig)
-	mysqlRepository := mysql.NewMysqlRepository(configConfig)
+	mysqlRepository, cleanup2, err := mysql.NewMysqlRepository(configConfig)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
 	loggerPlugin := plugin.NewLoggerPlugin()
 	metricsPlugin := plugin.NewMetricsPlugin()
-	v := ProvideSliceOfPlugin(loggerPlugin, metricsPlugin)
-	pluginManager := plugin.NewPluginManager(v)
+	v2 := ProvideSliceOfPlugin(loggerPlugin, metricsPlugin)
+	pluginManager := plugin.NewPluginManager(v2)
+	v3 := ProvidePrototypeNonPrimaryDocumentGenerator(configConfig)
+	v4 := ProvidePrototypePdfGenerator(configConfig)
 	floraContainer := &FloraContainer{
-		Config:             configConfig,
-		UserService:        userService,
-		MysqlRepository:    mysqlRepository,
-		LoggerPlugin:       loggerPlugin,
-		MetricsPlugin:      metricsPlugin,
-		PluginManager:      pluginManager,
-		PostgresRepository: postgresRepository,
-		SliceOfPlugin:      v,
+		Config:                             configConfig,
+		ReportService:                      reportService,
+		UserService:                        userService,
+		MysqlRepository:                    mysqlRepository,
+		LoggerPlugin:                       loggerPlugin,
+		MetricsPlugin:                      metricsPlugin,
+		PluginManager:                      pluginManager,
+		PostgresRepository:                 postgresRepository,
+		NonPrimaryDocumentGeneratorFactory: v3,
+		PdfGeneratorFactory:                v4,
+		DocumentGeneratorFactory:           v,
+		SliceOfPlugin:                      v2,
 	}
 	return floraContainer, func() {
+		cleanup2()
 		cleanup()
 	}, nil
 }
 
 // flora_injector.go:
+
+func ProvidePrototypeNonPrimaryDocumentGenerator(p0 config.Config) func() (*report.NonPrimaryDocumentGenerator, func(), error) {
+	return func() (*report.NonPrimaryDocumentGenerator, func(), error) {
+		return report.NewNonPrimaryDocumentGenerator(p0)
+	}
+}
+
+func ProvidePrototypePdfGenerator(p0 config.Config) func() (*report.PdfGenerator, func(), error) {
+	return func() (*report.PdfGenerator, func(), error) {
+		return report.NewPdfGenerator(p0)
+	}
+}
+
+func ProvidePrototypePdfGeneratorAsDocumentGenerator(p0 config.Config) func() (report.DocumentGenerator, func(), error) {
+	return func() (report.DocumentGenerator, func(), error) {
+		return report.NewPdfGenerator(p0)
+	}
+}
 
 func ProvideSliceOfPlugin(p0 *plugin.LoggerPlugin, p1 *plugin.MetricsPlugin) []plugin.Plugin {
 	return []plugin.Plugin{
@@ -53,6 +85,8 @@ func ProvideSliceOfPlugin(p0 *plugin.LoggerPlugin, p1 *plugin.MetricsPlugin) []p
 
 type FloraContainer struct {
 	Config config.Config
+
+	ReportService *domain.ReportService
 
 	UserService *domain.UserService
 
@@ -65,6 +99,12 @@ type FloraContainer struct {
 	PluginManager *plugin.PluginManager
 
 	PostgresRepository *postgres.PostgresRepository
+
+	NonPrimaryDocumentGeneratorFactory func() (*report.NonPrimaryDocumentGenerator, func(), error)
+
+	PdfGeneratorFactory func() (*report.PdfGenerator, func(), error)
+
+	DocumentGeneratorFactory func() (report.DocumentGenerator, func(), error)
 
 	SliceOfPlugin []plugin.Plugin
 }

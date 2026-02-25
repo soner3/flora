@@ -46,7 +46,7 @@ var (
 
 type WireGenerator struct{}
 
-func New() *WireGenerator {
+func NewWireGenerator() *WireGenerator {
 	return &WireGenerator{}
 }
 
@@ -62,6 +62,14 @@ import (
 	{{end}}
 )
 
+{{range .Prototypes}}
+func {{.WrapperName}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.Name}} {{$param.Type}}{{end}}) func() ({{.ReturnType}}{{if .HasCleanup}}, func(){{end}}{{if .HasError}}, error{{end}}) {
+	return func() ({{.ReturnType}}{{if .HasCleanup}}, func(){{end}}{{if .HasError}}, error{{end}}) {
+		return {{.ConstructorCall}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.Name}}{{end}})
+	}
+}
+{{end}}
+
 {{range .SliceBindings}}
 func ProvideSliceOf{{.InterfaceName}}({{range .Implementations}}{{.ParamName}} {{.TypePrefix}}{{.StructName}}, {{end}}) []{{.InterfacePrefix}}{{.InterfaceName}} {
 	return []{{.InterfacePrefix}}{{.InterfaceName}}{
@@ -75,6 +83,10 @@ type FloraContainer struct {
 	{{.StructName}} {{if .IsPointer}}*{{end}}{{.PackagePrefix}}{{.StructName}}
 	{{end}}
 	
+	{{range .Prototypes}}
+	{{.FieldName}} func() ({{.ReturnType}}{{if .HasCleanup}}, func(){{end}}{{if .HasError}}, error{{end}})
+	{{end}}
+
 	{{range .SliceBindings}}
 	SliceOf{{.InterfaceName}} []{{.InterfacePrefix}}{{.InterfaceName}}
 	{{end}}
@@ -84,6 +96,9 @@ func InitializeContainer() (*FloraContainer, func(), error) {
 	wire.Build(
 		{{range .Providers}}
 		{{.PackagePrefix}}{{.ConstructorName}},
+		{{end}}
+		{{range .Prototypes}}
+		{{.WrapperName}},
 		{{end}}
 		{{range .Bindings}}
 		wire.Bind(new({{.InterfacePrefix}}{{.InterfaceName}}), new({{if .IsPointer}}*{{end}}{{.ComponentPrefix}}{{.StructName}})),
@@ -102,6 +117,21 @@ type providerData struct {
 	PackagePrefix   string
 	ConstructorName string
 	IsPointer       bool
+}
+
+type paramData struct {
+	Name string
+	Type string
+}
+
+type prototypeData struct {
+	WrapperName     string
+	FieldName       string
+	ConstructorCall string
+	ReturnType      string
+	Params          []paramData
+	HasCleanup      bool
+	HasError        bool
 }
 
 type bindingData struct {
@@ -128,6 +158,7 @@ type templateData struct {
 	PackageName   string
 	Imports       []string
 	Providers     []providerData
+	Prototypes    []prototypeData
 	Bindings      []bindingData
 	SliceBindings []sliceBindingData
 }
@@ -160,13 +191,22 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 		pkgName = "main"
 	}
 
+	var generatedPkgPath string
+	for _, comp := range genCtx.Components {
+		if comp.PackageName == pkgName {
+			generatedPkgPath = comp.PackagePath
+			break
+		}
+	}
+
 	data := templateData{
 		PackageName: pkgName,
 	}
 
 	var providers []providerData
-	importSet := make(map[string]bool)
+	var prototypes []prototypeData
 	var bindings []bindingData
+	importSet := make(map[string]bool)
 
 	for _, comp := range genCtx.Components {
 		compPrefix := ""
@@ -178,30 +218,86 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 			importSet[comp.PackagePath] = true
 		}
 
-		providers = append(providers, providerData{
-			StructName:      comp.StructName,
-			PackagePrefix:   compPrefix,
-			ConstructorName: comp.ConstructorName,
-			IsPointer:       comp.IsPointer,
-		})
+		for _, p := range comp.Params {
+			for _, imp := range p.Imports {
+				importSet[imp] = true
+			}
+		}
 
-		for _, iface := range comp.Implements {
-			ifacePrefix := ""
-			if iface.PackageName != pkgName {
-				if iface.PackageName == "main" {
-					return errs.Wrap(ErrMainInterfaceLeak, "cannot generate container in package '%s' because interface '%s' belongs to package 'main'. Change output dir (-o) to your main directory or move the interface.", pkgName, iface.InterfaceName)
+		if comp.Scope == "prototype" {
+			var pData []paramData
+			for _, p := range comp.Params {
+				pType := p.Type
+				pType = strings.ReplaceAll(pType, "*"+pkgName+".", "*")
+				pType = strings.ReplaceAll(pType, "[]"+pkgName+".", "[]")
+				if after, ok := strings.CutPrefix(pType, pkgName+"."); ok {
+					pType = after
 				}
-				ifacePrefix = iface.PackageName + "."
-				importSet[iface.PackagePath] = true
+				pData = append(pData, paramData{Name: p.Name, Type: pType})
 			}
 
-			bindings = append(bindings, bindingData{
-				InterfacePrefix: ifacePrefix,
-				InterfaceName:   iface.InterfaceName,
-				ComponentPrefix: compPrefix,
+			retType := compPrefix + comp.StructName
+			if comp.IsPointer {
+				retType = "*" + retType
+			}
+
+			prototypes = append(prototypes, prototypeData{
+				WrapperName:     "ProvidePrototype" + comp.StructName,
+				FieldName:       comp.StructName + "Factory",
+				ConstructorCall: compPrefix + comp.ConstructorName,
+				ReturnType:      retType,
+				Params:          pData,
+				HasCleanup:      comp.HasCleanup,
+				HasError:        comp.HasError,
+			})
+
+			for _, iface := range comp.Implements {
+				ifacePrefix := ""
+				if iface.PackageName != pkgName {
+					if iface.PackageName == "main" {
+						return errs.Wrap(ErrMainInterfaceLeak, "cannot generate container in package '%s' because interface '%s' belongs to package 'main'. Change output dir (-o) to your main directory or move the interface.", pkgName, iface.InterfaceName)
+					}
+					ifacePrefix = iface.PackageName + "."
+					importSet[iface.PackagePath] = true
+				}
+
+				prototypes = append(prototypes, prototypeData{
+					WrapperName:     "ProvidePrototype" + comp.StructName + "As" + iface.InterfaceName,
+					FieldName:       iface.InterfaceName + "Factory",
+					ConstructorCall: compPrefix + comp.ConstructorName,
+					ReturnType:      ifacePrefix + iface.InterfaceName,
+					Params:          pData,
+					HasCleanup:      comp.HasCleanup,
+					HasError:        comp.HasError,
+				})
+			}
+
+		} else {
+			providers = append(providers, providerData{
 				StructName:      comp.StructName,
+				PackagePrefix:   compPrefix,
+				ConstructorName: comp.ConstructorName,
 				IsPointer:       comp.IsPointer,
 			})
+
+			for _, iface := range comp.Implements {
+				ifacePrefix := ""
+				if iface.PackageName != pkgName {
+					if iface.PackageName == "main" {
+						return errs.Wrap(ErrMainInterfaceLeak, "cannot generate container in package '%s' because interface '%s' belongs to package 'main'. Change output dir (-o) to your main directory or move the interface.", pkgName, iface.InterfaceName)
+					}
+					ifacePrefix = iface.PackageName + "."
+					importSet[iface.PackagePath] = true
+				}
+
+				bindings = append(bindings, bindingData{
+					InterfacePrefix: ifacePrefix,
+					InterfaceName:   iface.InterfaceName,
+					ComponentPrefix: compPrefix,
+					StructName:      comp.StructName,
+					IsPointer:       comp.IsPointer,
+				})
+			}
 		}
 	}
 
@@ -238,12 +334,16 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 	}
 
 	data.Providers = providers
+	data.Prototypes = prototypes
 	data.SliceBindings = sliceBindingsData
+	data.Bindings = bindings
 
 	for imp := range importSet {
+		if generatedPkgPath != "" && imp == generatedPkgPath {
+			continue
+		}
 		data.Imports = append(data.Imports, imp)
 	}
-	data.Bindings = bindings
 
 	tmpl, err := template.New("wire").Parse(wireTemplate)
 	if err != nil {

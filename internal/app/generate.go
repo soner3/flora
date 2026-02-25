@@ -46,7 +46,7 @@ func RunGenerate(dir, outDir string) error {
 	log.Info("Scan complete", "components_found", len(genCtx.Components), "slice_bindings_found", len(genCtx.SliceBindings))
 
 	log.Debug("Generating DI container...")
-	gen := wiregen.New()
+	gen := wiregen.NewWireGenerator()
 	if err := gen.Generate(outDir, genCtx); err != nil {
 		return err
 	}

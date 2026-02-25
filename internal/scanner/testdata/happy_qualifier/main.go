@@ -13,32 +13,16 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package happy
+package happyqualifier
 
-import "github.com/soner3/flora"
+import (
+	"os"
 
-type Iface interface{ Do() }
+	"github.com/soner3/flora"
+)
 
-type A struct {
-	flora.Component `flora:""`
-}
+type LocalType struct{}
 
-func NewA() *A { return nil }
+type Service struct{ flora.Component }
 
-type B struct {
-	flora.Component `flora:"primary,scope=prototype,constructor=BuildB"`
-}
-
-func BuildB() *B { return nil }
-func (b *B) Do() {}
-
-type C struct {
-	flora.Component `flora:"NewC"`
-}
-
-func NewC() *C   { return nil }
-func (c *C) Do() {}
-
-type Consumer struct{ flora.Component }
-
-func NewConsumer(i func() Iface) *Consumer { return nil }
+func NewService(f *os.File, loc LocalType) *Service { return nil }

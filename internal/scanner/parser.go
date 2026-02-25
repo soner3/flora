@@ -267,6 +267,26 @@ func processProviderFunc(compInfo *componentInfo, metadata *engine.ComponentMeta
 			}
 		}
 
+		if sigParam, isFunc := paramType.(*types.Signature); isFunc {
+
+			if sigParam.Params().Len() > 0 {
+				chainErr := fmt.Errorf("%w: %v", ErrInvalidProviderFunc, sigParam)
+				return errs.Wrap(chainErr, "invalid prototype provider func: '%s' for component '%s': prototype provider func must not have parameters",
+					metadata.ConstructorName, metadata.StructName)
+			}
+
+			if _, _, err := validateReturnValues(sigParam, metadata.ConstructorName, metadata.StructName, metadata.PackageName); err != nil {
+				return err
+			}
+
+			retType := sigParam.Results().At(0).Type()
+			if iface, isInterface := retType.Underlying().(*types.Interface); isInterface {
+				if !iface.Empty() {
+					(*neededInterfaces)[retType.String()] = retType
+				}
+			}
+		}
+
 	}
 
 	return nil
@@ -290,43 +310,17 @@ func validateProviderFunc(compInfo *componentInfo, metadata *engine.ComponentMet
 	}
 
 	sig := funcObj.Type().(*types.Signature)
+
+	hasCleanup, hasErr, err := validateReturnValues(sig, metadata.ConstructorName, metadata.StructName, metadata.PackageName)
+	if err != nil {
+		return nil, err
+	}
+
+	metadata.HasCleanup = hasCleanup
+	metadata.HasError = hasErr
+
 	results := sig.Results()
-	numResults := results.Len()
-
-	if numResults == 0 || numResults > 3 {
-		chainErr := fmt.Errorf("%w: %v", ErrInvalidProviderFunc, results)
-		return nil, errs.Wrap(chainErr, "invalid provider func: '%s' for component '%s' in package '%s' must return 1, 2, or 3 values",
-			metadata.ConstructorName, metadata.StructName, metadata.PackageName)
-	}
-
 	firstType := results.At(0).Type()
-	if firstType.String() == "error" || isCleanupFunc(firstType) {
-		chainErr := fmt.Errorf("%w: %v", ErrInvalidProviderFunc, firstType)
-		return nil, errs.Wrap(chainErr, "invalid provider func: '%s' for component '%s': 1st return value must neither be 'error' nor 'func()''", metadata.ConstructorName, metadata.StructName)
-	}
-
-	if numResults == 2 {
-		secondType := results.At(1).Type()
-		isErr := secondType.String() == "error"
-		isCleanup := isCleanupFunc(secondType)
-		if !isErr && !isCleanup {
-			chainErr := fmt.Errorf("%w: %v", ErrInvalidProviderFunc, secondType)
-			return nil, errs.Wrap(chainErr, "invalid provider func: '%s' for component '%s': 2nd return value must be 'error' or 'func()'", metadata.ConstructorName, metadata.StructName)
-		}
-	}
-
-	if numResults == 3 {
-		secondType := results.At(1).Type()
-		if !isCleanupFunc(secondType) {
-			chainErr := fmt.Errorf("%w: %v", ErrInvalidProviderFunc, secondType)
-			return nil, errs.Wrap(chainErr, "invalid provider func: '%s' for component '%s': 2nd return value must be 'func()' when returning 3 values", metadata.ConstructorName, metadata.StructName)
-		}
-		thirdType := results.At(2).Type()
-		if thirdType.String() != "error" {
-			chainErr := fmt.Errorf("%w: %v", ErrInvalidProviderFunc, thirdType)
-			return nil, errs.Wrap(chainErr, "invalid provider func: '%s' for component '%s': 3rd return value must be 'error' when returning 3 values", metadata.ConstructorName, metadata.StructName)
-		}
-	}
 
 	var baseRetType types.Type
 
@@ -346,8 +340,9 @@ func validateProviderFunc(compInfo *componentInfo, metadata *engine.ComponentMet
 
 	params := sig.Params()
 
-	for v := range params.Variables() {
-		paramType := v.Type()
+	for i := 0; i < params.Len(); i++ {
+		param := params.At(i)
+		paramType := param.Type()
 		var baseParamType types.Type
 
 		if ptr, isPtr := paramType.(*types.Pointer); isPtr {
@@ -361,6 +356,22 @@ func validateProviderFunc(compInfo *componentInfo, metadata *engine.ComponentMet
 			return nil, errs.Wrap(chainErr, "circular dependency: provider func '%s' for component '%s' cannot require its own type as a parameter",
 				metadata.ConstructorName, metadata.StructName)
 		}
+
+		var imports []string
+		qualifier := func(p *types.Package) string {
+			if p.Path() != metadata.PackagePath {
+				imports = append(imports, p.Path())
+			}
+			return p.Name()
+		}
+
+		paramTypeStr := types.TypeString(paramType, qualifier)
+
+		metadata.Params = append(metadata.Params, engine.ParamMetadata{
+			Name:    fmt.Sprintf("p%d", i),
+			Type:    paramTypeStr,
+			Imports: imports,
+		})
 	}
 
 	return sig, nil
@@ -471,4 +482,51 @@ func bindSlicesToComponents(components []*scannedComponent, neededSlices map[str
 		}
 	}
 	return sliceBindings, nil
+}
+
+// validateReturnValues validates the return values of a provider function
+// Returns: (hasCleanup, hasError, error)
+func validateReturnValues(sig *types.Signature, constructorName, structName, pkgName string) (bool, bool, error) {
+	results := sig.Results()
+	numResults := results.Len()
+
+	if numResults == 0 || numResults > 3 {
+		chainErr := fmt.Errorf("%w: %v", ErrInvalidProviderFunc, results)
+		return false, false, errs.Wrap(chainErr, "invalid provider func: '%s' for component '%s' in package '%s' must return 1, 2, or 3 values",
+			constructorName, structName, pkgName)
+	}
+
+	firstType := results.At(0).Type()
+	if firstType.String() == "error" || isCleanupFunc(firstType) {
+		chainErr := fmt.Errorf("%w: %v", ErrInvalidProviderFunc, firstType)
+		return false, false, errs.Wrap(chainErr, "invalid provider func: '%s' for component '%s': 1st return value must neither be 'error' nor 'func()'", constructorName, structName)
+	}
+
+	hasCleanup, hasErr := false, false
+
+	if numResults == 2 {
+		secondType := results.At(1).Type()
+		hasErr = secondType.String() == "error"
+		hasCleanup = isCleanupFunc(secondType)
+		if !hasErr && !hasCleanup {
+			chainErr := fmt.Errorf("%w: %v", ErrInvalidProviderFunc, secondType)
+			return false, false, errs.Wrap(chainErr, "invalid provider func: '%s' for component '%s': 2nd return value must be 'error' or 'func()'", constructorName, structName)
+		}
+	}
+
+	if numResults == 3 {
+		secondType := results.At(1).Type()
+		if !isCleanupFunc(secondType) {
+			chainErr := fmt.Errorf("%w: %v", ErrInvalidProviderFunc, secondType)
+			return false, false, errs.Wrap(chainErr, "invalid provider func: '%s' for component '%s': 2nd return value must be 'func()' when returning 3 values", constructorName, structName)
+		}
+		thirdType := results.At(2).Type()
+		if thirdType.String() != "error" {
+			chainErr := fmt.Errorf("%w: %v", ErrInvalidProviderFunc, thirdType)
+			return false, false, errs.Wrap(chainErr, "invalid provider func: '%s' for component '%s': 3rd return value must be 'error' when returning 3 values", constructorName, structName)
+		}
+		hasCleanup, hasErr = true, true
+	}
+
+	return hasCleanup, hasErr, nil
 }

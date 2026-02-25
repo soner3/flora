@@ -13,32 +13,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package happy
+package errprototypeparam
 
 import "github.com/soner3/flora"
 
-type Iface interface{ Do() }
+type Bad struct{ flora.Component }
 
-type A struct {
-	flora.Component `flora:""`
-}
-
-func NewA() *A { return nil }
-
-type B struct {
-	flora.Component `flora:"primary,scope=prototype,constructor=BuildB"`
-}
-
-func BuildB() *B { return nil }
-func (b *B) Do() {}
-
-type C struct {
-	flora.Component `flora:"NewC"`
-}
-
-func NewC() *C   { return nil }
-func (c *C) Do() {}
-
-type Consumer struct{ flora.Component }
-
-func NewConsumer(i func() Iface) *Consumer { return nil }
+func NewBad(f func(id int) *Bad) *Bad { return nil }

@@ -108,6 +108,62 @@ func TestGenerate(t *testing.T) {
 			expErr: ErrMainInterfaceLeak,
 		},
 		{
+			name: "TestPrototypeInterfaceInMainLeak",
+			setupDir: func(t *testing.T) string {
+				return t.TempDir()
+			},
+			genCtx: &engine.GeneratorContext{
+				Components: []*engine.ComponentMetadata{
+					{
+						PackageName:     "otherpkg",
+						PackagePath:     "github.com/test/otherpkg",
+						StructName:      "ProtoService",
+						ConstructorName: "NewProtoService",
+						Scope:           "prototype",
+						Implements: []engine.InterfaceMetadata{
+							{
+								PackageName:   "main",
+								PackagePath:   "github.com/test/main",
+								InterfaceName: "MyInterface",
+							},
+						},
+					},
+				},
+			},
+			expErr: ErrMainInterfaceLeak,
+		},
+		{
+			name: "TestPrototypeLocalParamsTrimming",
+			setupDir: func(t *testing.T) string {
+				tmpDir, err := os.MkdirTemp(".", "flora_test_out_*")
+				if err != nil {
+					t.Fatal(err)
+				}
+				dummyFile := filepath.Join(tmpDir, "dummy.go")
+				os.WriteFile(dummyFile, []byte("package main\n"), 0644)
+
+				return tmpDir
+			},
+			genCtx: &engine.GeneratorContext{
+				Components: []*engine.ComponentMetadata{
+					{
+						PackageName:     "main",
+						PackagePath:     "github.com/test/main",
+						StructName:      "Service",
+						ConstructorName: "NewService",
+						Scope:           "prototype",
+						Params: []engine.ParamMetadata{
+							{Name: "p0", Type: "*main.MyDep", Imports: []string{"context"}},
+							{Name: "p1", Type: "[]main.MyDep"},
+							{Name: "p2", Type: "main.MyDep"},
+						},
+					},
+				},
+			},
+
+			expErr: ErrWireExecution,
+		},
+		{
 			name: "TestInvalidOutputDir",
 			setupDir: func(t *testing.T) string {
 				return "invalid\x00path"
@@ -287,6 +343,42 @@ func TestGenerate(t *testing.T) {
 			genCtx: nil,
 			expErr: ErrRenameGeneratedFile,
 		},
+		{
+			name: "TestSelfImportContinue",
+			setupDir: func(t *testing.T) string {
+				tmpDir, err := os.MkdirTemp(".", "flora_test_out_*")
+				if err != nil {
+					t.Fatal(err)
+				}
+				dummyFile := filepath.Join(tmpDir, "dummy.go")
+				os.WriteFile(dummyFile, []byte("package main\n"), 0644)
+				return tmpDir
+			},
+			genCtx: &engine.GeneratorContext{
+				Components: []*engine.ComponentMetadata{
+					{
+						PackageName:     "main",
+						PackagePath:     "github.com/test/main",
+						StructName:      "App",
+						ConstructorName: "NewApp",
+					},
+					{
+						PackageName:     "other",
+						PackagePath:     "github.com/test/other",
+						StructName:      "ExternalService",
+						ConstructorName: "NewExternalService",
+						Params: []engine.ParamMetadata{
+							{
+								Name:    "p0",
+								Type:    "*main.App",
+								Imports: []string{"github.com/test/main"},
+							},
+						},
+					},
+				},
+			},
+			expErr: ErrWireExecution,
+		},
 	}
 
 	for _, tc := range testcases {
@@ -303,7 +395,7 @@ func TestGenerate(t *testing.T) {
 				genCtx = loadHappyComponents(t)
 			}
 
-			err := New().Generate(outDir, genCtx)
+			err := NewWireGenerator().Generate(outDir, genCtx)
 
 			if tc.expErr != nil {
 				if err == nil {

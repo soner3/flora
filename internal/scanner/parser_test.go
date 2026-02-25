@@ -119,6 +119,21 @@ func TestParsePackages(t *testing.T) {
 			testdataPath: "testdata/err_invalid_scope",
 			expErr:       ErrInvalidScope,
 		},
+		{
+			name:         "TestParsePackagesHappyQualifier",
+			testdataPath: "testdata/happy_qualifier",
+			expErr:       nil,
+		},
+		{
+			name:         "TestParsePackagesPrototypeWithParams",
+			testdataPath: "testdata/err_prototype_param",
+			expErr:       ErrInvalidProviderFunc,
+		},
+		{
+			name:         "TestParsePackagesPrototypeInvalidReturn",
+			testdataPath: "testdata/err_prototype_return",
+			expErr:       ErrInvalidProviderFunc,
+		},
 	}
 
 	for _, tc := range testcases {
@@ -143,9 +158,6 @@ func TestParsePackages(t *testing.T) {
 					t.Errorf("ParsePackages returned no components")
 				}
 
-				if len(genCtx.SliceBindings) < 1 {
-					t.Errorf("ParsePackages returned no slice bindings")
-				}
 			}
 		})
 	}

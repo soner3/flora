@@ -13,32 +13,37 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package mysql
+package domain
 
 import (
 	"fmt"
 
 	"github.com/soner3/flora"
-	"github.com/soner3/flora/example/config"
+	"github.com/soner3/flora/example/report"
 )
 
-type MysqlRepository struct {
+type ReportService struct {
 	flora.Component
-	cfg config.Config
+
+	docFactory func() (report.DocumentGenerator, func(), error)
 }
 
-func NewMysqlRepository(cfg config.Config) (*MysqlRepository, func(), error) {
-	return &MysqlRepository{
-			cfg: cfg,
-		}, func() {
-			fmt.Println("   -> [MysqlRepository] Cleanup: Temporary MySQL files deleted.")
-		}, nil
+func NewReportService(docFactory func() (report.DocumentGenerator, func(), error)) *ReportService {
+	return &ReportService{
+		docFactory: docFactory,
+	}
 }
 
-func (r *MysqlRepository) GetUserName() string {
-	return "Foo (from MySQL)"
-}
+func (s *ReportService) CreateMonthlyReport(month string) {
+	fmt.Printf("\nCreating monthly report for %s...\n", month)
+	generator, cleanup, err := s.docFactory()
+	if err != nil {
+		fmt.Println("Error creating generator:", err)
+		return
+	}
 
-func (r *MysqlRepository) String() string {
-	return "MysqlRepository"
+	defer cleanup()
+
+	result := generator.Generate(month + "-Report")
+	fmt.Println("Result:", result)
 }

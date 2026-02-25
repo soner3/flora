@@ -42,3 +42,9 @@ func (c *C) Do() {}
 type Consumer struct{ flora.Component }
 
 func NewConsumer(i Iface) *Consumer { return nil }
+
+type ProtoConsumer struct{ flora.Component }
+
+func NewProtoConsumer(ifaceFactory func() Iface, structFactory func() *B) *ProtoConsumer {
+	return nil
+}

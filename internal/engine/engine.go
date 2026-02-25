@@ -21,6 +21,12 @@ type InterfaceMetadata struct {
 	InterfaceName string
 }
 
+type ParamMetadata struct {
+	Name    string
+	Type    string
+	Imports []string
+}
+
 type ComponentMetadata struct {
 	PackageName     string
 	PackagePath     string
@@ -29,7 +35,10 @@ type ComponentMetadata struct {
 	IsPrimary       bool
 	Scope           string
 	IsPointer       bool
+	HasCleanup      bool
+	HasError        bool
 	Implements      []InterfaceMetadata
+	Params          []ParamMetadata
 }
 
 type SliceBindingMetadata struct {
