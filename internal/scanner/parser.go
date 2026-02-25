@@ -21,6 +21,7 @@ import (
 	"go/types"
 	"log/slog"
 	"reflect"
+	"slices"
 	"strings"
 
 	"github.com/soner3/flora/internal/engine"
@@ -36,11 +37,20 @@ var (
 	ErrInvalidInterface     = errors.New("invalid interface")
 	ErrNoImplementation     = errors.New("no component implements interface")
 	ErrInvalidSlice         = errors.New("invalid slice")
+	ErrInvalidScope         = errors.New("invalid scope")
 )
 
 const (
+	ScopeSingleton = "singleton"
+	ScopePrototype = "prototype"
+
 	ComponentMarker = "github.com/soner3/flora.Component"
 )
+
+var scopes = []string{
+	ScopeSingleton,
+	ScopePrototype,
+}
 
 var markers = []string{
 	ComponentMarker,
@@ -156,20 +166,20 @@ func isMarkedWith(structType *types.Struct) (bool, string, string) {
 }
 
 // parseFloraTag parses the flora tag and sets the metadata accordingly
-func parseFloraTag(rawTag string, metadata *engine.ComponentMetadata) {
+func parseFloraTag(rawTag string, metadata *engine.ComponentMetadata) error {
 	metadata.ConstructorName = "New" + metadata.StructName
 	metadata.IsPrimary = false
-	metadata.Scope = "singleton"
+	metadata.Scope = ScopeSingleton
 
 	if rawTag == "" {
-		return
+		return nil
 	}
 
 	structTag := reflect.StructTag(rawTag)
 	val := structTag.Get("flora")
 
 	if val == "" {
-		return
+		return nil
 	}
 
 	parts := strings.SplitSeq(val, ",")
@@ -184,12 +194,17 @@ func parseFloraTag(rawTag string, metadata *engine.ComponentMetadata) {
 		case strings.HasPrefix(part, "constructor="):
 			metadata.ConstructorName = strings.TrimPrefix(part, "constructor=")
 		case strings.HasPrefix(part, "scope="):
-			metadata.Scope = strings.TrimPrefix(part, "scope=")
+			scope := strings.TrimPrefix(part, "scope=")
+			if !slices.Contains(scopes, scope) {
+				return errs.Wrap(ErrInvalidScope, "invalid scope '%s' for component '%s' in package '%s'", scope, metadata.StructName, metadata.PackageName)
+			}
+			metadata.Scope = scope
 		default:
 			metadata.ConstructorName = part
 		}
 	}
 
+	return nil
 }
 
 // processComponent processes a component and returns a scannedComponent
@@ -202,7 +217,9 @@ func processComponent(compInfo *componentInfo, neededInterfaces, neededSlices *m
 
 	switch compInfo.Marker {
 	case ComponentMarker:
-		parseFloraTag(compInfo.Tag, metadata)
+		if err := parseFloraTag(compInfo.Tag, metadata); err != nil {
+			return nil, err
+		}
 
 		obj := compInfo.Pkg.Types.Scope().Lookup(metadata.ConstructorName)
 

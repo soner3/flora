@@ -29,14 +29,11 @@ func TestParsePackages(t *testing.T) {
 		testdataPath string
 		expErr       error
 	}{
-		// --- Erfolgsfall ---
 		{
 			name:         "TestParsePackagesSuccessful",
 			testdataPath: "testdata/happy",
 			expErr:       nil,
 		},
-
-		// --- Provider / Constructor Fehler ---
 		{
 			name:         "TestParsePackagesMissingProvider",
 			testdataPath: "testdata/err_no_constructor",
@@ -77,8 +74,6 @@ func TestParsePackages(t *testing.T) {
 			testdataPath: "testdata/err_three_returns_wrong_third",
 			expErr:       ErrInvalidProviderFunc,
 		},
-
-		// --- Interface & Binding Fehler ---
 		{
 			name:         "TestParsePackagesNoImplementation",
 			testdataPath: "testdata/err_no_impl",
@@ -94,7 +89,6 @@ func TestParsePackages(t *testing.T) {
 			testdataPath: "testdata/err_collision_multi_primary",
 			expErr:       ErrInterfaceCollision,
 		},
-		// --- Neue Edge Cases für 100% Coverage ---
 		{
 			name:         "TestParsePackagesAnonSlice",
 			testdataPath: "testdata/err_anon_slice",
@@ -119,6 +113,11 @@ func TestParsePackages(t *testing.T) {
 			name:         "TestParsePackagesAnonIfacePrimary",
 			testdataPath: "testdata/err_anon_iface_primary",
 			expErr:       ErrInvalidInterface,
+		},
+		{
+			name:         "TestParsePackagesInvalidScope",
+			testdataPath: "testdata/err_invalid_scope",
+			expErr:       ErrInvalidScope,
 		},
 	}
 
