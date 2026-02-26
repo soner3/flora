@@ -230,6 +230,25 @@ Comments must be placed directly above the method definition.
 
 ---
 
+## ❓ FAQ & Design Philosophy
+
+### Why does Flora use both Struct Tags AND Magic Comments? Isn't that inconsistent?
+At first glance, using struct tags for `@Component` and magic comments for `@Configuration` might look inconsistent. However, this is a deliberate, highly idiomatic design choice tailored specifically for Go.
+
+* **Struct Tags for Domain Code:** Go natively supports metadata on structs via tags (like `json` or `gorm`). For domain services where you define the struct, Flora uses tags because it is the most robust, compiler-checked way to attach metadata in Go.
+* **Magic Comments for Infrastructure:** Go strictly forbids tags on functions. To provide Spring-like `@Bean` factories for external, third-party types (like `*sql.DB`), Flora uses Magic Comments (`// flora:primary`). This follows the exact same pattern used by official Go tools like `//go:generate` or `//go:embed`. Flora simply uses the right Go-native tool for the right job.
+
+### Why can't I just create a wrapper struct with `flora.Component` for external types?
+Technically, you could create a `DBWrapper` struct that embeds `flora.Component` and holds a `*sql.DB`. But this leads to **Type Pollution**. 
+
+If you do this, your consumers can no longer request `*sql.DB` in their constructors; they are forced to request `*DBWrapper`. This tightly couples your clean domain logic to boilerplate wrapper structs. 
+
+By using `flora.Configuration` and factory methods, Flora injects the actual standard types (`*sql.DB`, `*redis.Client`) directly into the container, keeping your domain code 100% clean and agnostic of the DI framework.
+
+**Architectural Clarity:** Furthermore, this approach naturally enforces a clean project structure. Instead of scattering random wrapper structs across your codebase, `flora.Configuration` guides you to group your infrastructure setup into dedicated configuration files (e.g., `DatabaseConfig`, `AWSConfig`). This makes it immediately obvious to any developer where and how external dependencies are wired into the application.
+
+---
+
 ## 📜 License
 
 Flora is released under the [Apache 2.0 License](https://www.google.com/search?q=LICENSE).
