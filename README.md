@@ -36,7 +36,7 @@ The Go community traditionally dislikes the "magic" of frameworks like Spring (R
 
 ## 📖 Comprehensive Guide & Examples
 
-### 1. The Standard Component (`@Component`)
+### 1. The Standard Component
 
 For your own domain services, simply embed `flora.Component` and use struct tags. Flora will automatically look for a `New<StructName>` constructor.
 
@@ -73,7 +73,7 @@ func BuildUserService(repo UserRepository) *UserService {
 
 ```
 
-### 2. Third-Party Integrations (`@Configuration` & `@Bean`)
+### 2. Third-Party Integrations
 
 You cannot embed `flora.Component` into an external struct like `*sql.DB`. For these cases, use `flora.Configuration`. Because Go does not support tags on methods, Flora uses idiomatic **Magic Comments** here.
 
