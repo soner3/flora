@@ -37,6 +37,7 @@ type ComponentMetadata struct {
 	IsPointer       bool
 	HasCleanup      bool
 	HasError        bool
+	Order           int
 	Implements      []InterfaceMetadata
 	Params          []ParamMetadata
 }

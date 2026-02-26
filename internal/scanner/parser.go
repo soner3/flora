@@ -20,8 +20,10 @@ import (
 	"fmt"
 	"go/types"
 	"log/slog"
+	"math"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/soner3/flora/internal/engine"
@@ -38,6 +40,7 @@ var (
 	ErrNoImplementation     = errors.New("no component implements interface")
 	ErrInvalidSlice         = errors.New("invalid slice")
 	ErrInvalidScope         = errors.New("invalid scope")
+	ErrInvalidOrder         = errors.New("invalid order")
 )
 
 const (
@@ -170,6 +173,7 @@ func parseFloraTag(rawTag string, metadata *engine.ComponentMetadata) error {
 	metadata.ConstructorName = "New" + metadata.StructName
 	metadata.IsPrimary = false
 	metadata.Scope = ScopeSingleton
+	metadata.Order = math.MaxInt32
 
 	if rawTag == "" {
 		return nil
@@ -199,6 +203,13 @@ func parseFloraTag(rawTag string, metadata *engine.ComponentMetadata) error {
 				return errs.Wrap(ErrInvalidScope, "invalid scope '%s' for component '%s' in package '%s'", scope, metadata.StructName, metadata.PackageName)
 			}
 			metadata.Scope = scope
+		case strings.HasPrefix(part, "order="):
+			orderStr := strings.TrimPrefix(part, "order=")
+			order, err := strconv.Atoi(orderStr)
+			if err != nil {
+				return errs.Wrap(ErrInvalidOrder, "invalid order '%s' for component '%s' in package '%s' (must be an integer)", orderStr, metadata.StructName, metadata.PackageName)
+			}
+			metadata.Order = order
 		default:
 			metadata.ConstructorName = part
 		}

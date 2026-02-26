@@ -17,6 +17,7 @@ package wiregen
 
 import (
 	"bytes"
+	"cmp"
 	"errors"
 	"fmt"
 	"go/build"
@@ -24,6 +25,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"text/template"
 
@@ -303,6 +305,9 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 
 	var sliceBindingsData []sliceBindingData
 	for _, sb := range genCtx.SliceBindings {
+		slices.SortFunc(sb.Implementations, func(a, b *engine.ComponentMetadata) int {
+			return cmp.Compare(a.Order, b.Order)
+		})
 		ifacePrefix := ""
 		if sb.Interface.PackageName != pkgName && sb.Interface.PackageName != "main" {
 			ifacePrefix = sb.Interface.PackageName + "."

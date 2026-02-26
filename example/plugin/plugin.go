@@ -27,7 +27,7 @@ type Plugin interface {
 }
 
 type LoggerPlugin struct {
-	flora.Component
+	flora.Component `flora:"order=1"`
 }
 
 func NewLoggerPlugin() *LoggerPlugin {
@@ -43,7 +43,7 @@ func (p *LoggerPlugin) Execute() {
 }
 
 type MetricsPlugin struct {
-	flora.Component
+	flora.Component `flora:"order=2"`
 }
 
 func NewMetricsPlugin() *MetricsPlugin {

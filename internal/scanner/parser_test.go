@@ -134,6 +134,11 @@ func TestParsePackages(t *testing.T) {
 			testdataPath: "testdata/err_prototype_return",
 			expErr:       ErrInvalidProviderFunc,
 		},
+		{
+			name:         "TestParsePackagesInvalidOrder",
+			testdataPath: "testdata/err_invalid_order",
+			expErr:       ErrInvalidOrder,
+		},
 	}
 
 	for _, tc := range testcases {

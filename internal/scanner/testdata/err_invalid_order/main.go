@@ -13,32 +13,14 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package happy
+package errinvalidorder
 
 import "github.com/soner3/flora"
 
-type Iface interface{ Do() }
-
-type A struct {
-	flora.Component `flora:""`
+type BadOrderComponent struct {
+	flora.Component `flora:"order=one"`
 }
 
-func NewA() *A { return nil }
-
-type B struct {
-	flora.Component `flora:"primary,scope=prototype,constructor=BuildB,order=1"`
+func NewBadOrderComponent() *BadOrderComponent {
+	return &BadOrderComponent{}
 }
-
-func BuildB() *B { return nil }
-func (b *B) Do() {}
-
-type C struct {
-	flora.Component `flora:"NewC"`
-}
-
-func NewC() *C   { return nil }
-func (c *C) Do() {}
-
-type Consumer struct{ flora.Component }
-
-func NewConsumer(i func() Iface) *Consumer { return nil }

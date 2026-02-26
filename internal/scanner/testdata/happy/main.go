@@ -26,7 +26,7 @@ type A struct {
 func NewA() *A { return nil }
 
 type B struct {
-	flora.Component `flora:"primary,scope=prototype,constructor=BuildB"`
+	flora.Component `flora:"primary,scope=prototype,constructor=BuildB,order=1"`
 }
 
 func BuildB() *B { return nil }
