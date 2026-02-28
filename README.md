@@ -285,5 +285,3 @@ Copyright © 2026 Soner Astan.
 
 Flora builds its foundation upon [Google Wire](https://github.com/google/wire). While Flora provides the auto-discovery, AST parsing, and the highly automated developer experience, the actual generation of the static dependency graph is powered by Wire.
 Lies es dir in Ruhe durch. Trifft diese Struktur genau den "Aha!"-Moment, den Entwickler beim Lesen deines Repositories haben sollen?
-
-```
