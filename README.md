@@ -1,56 +1,81 @@
-# 🌿 Flora
+<div align="center">
+  <img src="https://github.com/user-attachments/assets/fc403eb3-7b4c-45e6-b57a-10502865f98e" alt="Flora DI Framework Banner" width="65%" />
 
-**Compile-time Dependency Injection for Go. Spring-like convenience, zero runtime overhead, and absolutely no magic.**
+  <br />
+  <br />
 
-Flora is an organic, highly automated dependency injection framework for Go. It bridges the gap between the phenomenal developer experience (DX) of enterprise frameworks like Spring Boot and the strict, explicit, performance-oriented philosophy of Go.
+  <h1>🌿 Flora</h1>
+  <p><b>Compile-time, reflection-free Dependency Injection for Go.</b><br/>
+  <i>Spring-like developer experience, but with zero runtime overhead and absolute type safety.</i></p>
 
-It scans your code, discovers components via struct tags or magic comments, and automatically generates a strongly-typed, readable DI container using **Google Wire** under the hood.
+  [![Go Reference](https://pkg.go.dev/badge/github.com/soner3/flora.svg)](https://pkg.go.dev/github.com/soner3/flora)
+  [![Go Report Card](https://goreportcard.com/badge/github.com/soner3/flora)](https://goreportcard.com/report/github.com/soner3/flora)
+  [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+</div>
 
-No more manual wiring. No more massive `Initialize()` functions. Just write your code, and let Flora grow the ecosystem.
+<br />
+
+## 🤔 The Problem
+
+Dependency Injection (DI) in Go traditionally forces you to choose between two painful extremes:
+
+1. **Manual Wiring (Boilerplate Hell):** You manually instantiate every struct and pass dependencies down the chain. In projects with 50+ services, your `main.go` becomes a massive, unmaintainable 1000-line initialization block. Tools like Google Wire help, but still require you to manually write and maintain massive `ProviderSets`.
+2. **Reflection (Runtime Magic):** You use dynamic frameworks (like Uber Dig or Spring in Java) that resolve dependencies at runtime. This causes slower startup times, circumvents Go's strict type system, and worst of all: missing dependencies cause your application to panic *at runtime* instead of failing during compilation.
+
+## 💡 What is Flora? (The Solution)
+
+Flora is an organic, highly automated dependency injection framework that acts as the missing "Convention over Configuration" layer for Go. 
+
+It parses your source code's Abstract Syntax Tree (AST), discovers components natively via struct tags or magic comments, and automatically generates a strongly-typed, readable DI container using **[Google Wire](https://github.com/google/wire)** under the hood.
+
+**How it differs:** Flora gives you the incredible Developer Experience (DX) of Spring Boot annotations, but evaluates everything strictly at **compile-time**. No reflection. No runtime proxies. If your code compiles, your dependency graph is 100% safe.
+
+<img src="https://github.com/user-attachments/assets/3d64cd84-891d-4238-98e5-3c0fb7a2448e" alt="Flora Icon" width="150" align="right" style="margin-left: 20px; margin-bottom: 20px;" />
+
+## ✨ What Flora Offers
+
+* **🚀 Zero Runtime Overhead:** The generated code is exactly as fast and memory-efficient as manually written Go code.
+* **🔍 Auto-Discovery:** Embed `flora.Component` in your structs. Flora finds them, reads their constructors, and wires them automatically.
+* **📦 Third-Party Integration:** Use `flora.Configuration` to effortlessly integrate external libraries (like Database drivers or Loggers) into your DI container.
+* **🔌 Automatic Interface Binding:** If a component implements an interface, Flora binds it automatically. If multiple implement it, you can define a `primary` component.
+* **📚 Multi-Binding (Slices):** Ask for a slice of an interface (`[]Plugin`), and Flora automatically collects all implementations across your codebase and injects them.
+* **🏭 Prototypes (Factories):** Need a fresh instance instead of a Singleton? Flora generates clean closure factories (`func() (*Service, error)`) out of the box.
+* **🧹 Native Go Idioms:** Full, automatic support for constructors returning initialization `error`s and `cleanup func()` routines.
 
 ---
 
-## 🤔 Why Flora? (The Philosophy)
+## 📦 Installation
 
-The Go community traditionally dislikes the "magic" of frameworks like Spring (Reflection, runtime proxies, implicit behavior) because it contradicts Go's philosophy of explicitness and causes runtime panics. However, manually maintaining DI graphs (even with tools like Google Wire) becomes a massive boilerplate burden in projects with 50+ microservices.
+Flora consists of two parts: the CLI tool (to generate the container) and the core library (for the markers).
 
-**Flora is the golden middle ground:**
+```bash
+# 1. Install the CLI tool globally
+go install [github.com/soner3/flora/cmd/flora@latest](https://github.com/soner3/flora/cmd/flora@latest)
 
-1. **Developer Experience:** You define dependencies declaratively right where they belong (at the component level).
-2. **Code Generation, Not Reflection:** Flora acts as a transpiler. It parses your AST (Abstract Syntax Tree) and generates a static, human-readable `flora_container.go` file.
-3. **Fail Fast:** Missing dependencies or circular loops are caught at **compile time**. If your code compiles, your DI graph is 100% safe.
+# 2. Add the library to your project
+go get [github.com/soner3/flora@latest](https://github.com/soner3/flora@latest)
 
----
-
-## ✨ Key Features
-
-* 🚀 **Zero Runtime Overhead:** No `reflect` package used at runtime. Full execution speed.
-* 🔍 **Auto-Discovery:** Embed `flora.Component` in your struct, and Flora handles the rest.
-* 📦 **Third-Party Integration:** Use `flora.Configuration` to wrap external dependencies (like `*sql.DB` or Loggers) cleanly into the DI graph.
-* 🔌 **Automatic Interface Binding:** If a component implements an interface, Flora binds it automatically when requested.
-* 📚 **Multi-Binding (Slices):** Request a slice of an interface (e.g., `[]Plugin`), and Flora automatically discovers and injects *all* implementations!
-* 🏭 **Prototypes (Factories):** Need a fresh instance per HTTP request? Request a factory function (`func() (*Service, func(), error)`) and Flora handles the closure cleanly.
-* 🧹 **Native Cleanup & Error Handling:** Fully supports Go-idiomatic constructors returning `error` and `cleanup func()`.
+```
 
 ---
 
-## 📖 Comprehensive Guide & Examples
+## 🛠️ How it Works (Detailed Examples)
 
-### 1. The Standard Component
+### 1. The Basics: Components & Auto-Wiring
 
-For your own domain services, simply embed `flora.Component` and use struct tags. Flora will automatically look for a `New<StructName>` constructor.
+Instead of maintaining huge initialization scripts, you define dependencies declaratively right where they belong. Just embed `flora.Component` and provide a standard Go constructor.
 
 ```go
 package domain
 
-import "github.com/soner3/flora"
+import "[github.com/soner3/flora](https://github.com/soner3/flora)"
 
-// 1. The Interface
+// 1. Define your interface
 type UserRepository interface {
     GetUserName() string
 }
 
-// 2. The Implementation
+// 2. Mark your implementation
 type PostgresRepo struct {
     flora.Component `flora:"primary"` // "primary" resolves collisions if multiple repos exist
 }
@@ -60,104 +85,111 @@ func NewPostgresRepo() *PostgresRepo {
 }
 func (r *PostgresRepo) GetUserName() string { return "Alice" }
 
-// 3. The Consumer
+// 3. Consume the interface
 type UserService struct {
     flora.Component `flora:"constructor=BuildUserService"`
     repo UserRepository
 }
 
-// Flora will automatically inject PostgresRepo as the UserRepository here!
+// Flora scans this signature, notices you need a UserRepository, 
+// and automatically injects the PostgresRepo!
 func BuildUserService(repo UserRepository) *UserService {
     return &UserService{repo: repo}
 }
 
 ```
 
-### 2. Third-Party Integrations
+### 2. Third-Party Integrations (`@Configuration`)
 
-You cannot embed `flora.Component` into an external struct like `*sql.DB`. For these cases, use `flora.Configuration`. Because Go does not support tags on methods, Flora uses idiomatic **Magic Comments** here.
+You cannot (and should not) embed `flora.Component` into external structs like `*sql.DB` or `*redis.Client`. To prevent "wrapper struct pollution", Flora offers Configurations.
+
+Because Go does not allow struct tags on functions, Flora uses **Magic Comments** (an idiomatic Go pattern used by `//go:embed` or `//go:generate`) to configure these providers.
 
 ```go
 package config
 
 import (
     "database/sql"
-    "github.com/soner3/flora"
+    "[github.com/soner3/flora](https://github.com/soner3/flora)"
 )
 
 type DatabaseConfig struct {
-    flora.Configuration // Marks this struct as a configuration provider
+    flora.Configuration // Marks this struct as a config provider
 }
 
 // flora:primary
-func (c *DatabaseConfig) ProvidePostgres() (*sql.DB, func(), error) {
+func (c *DatabaseConfig) ProvidePostgres(logger *domain.Logger) (*sql.DB, func(), error) {
     db, err := sql.Open("postgres", "...")
     if err != nil {
-        return nil, nil, err // Handled cleanly at startup
+        return nil, nil, err 
     }
     
+    // Flora handles the cleanup function automatically during graceful shutdown!
     cleanup := func() { db.Close() }
     
-    // Flora registers *sql.DB in the container and handles the cleanup!
     return db, cleanup, nil 
 }
 
 ```
 
-### 3. The Magic of Multi-Binding (Plugins)
+### 3. Multi-Binding (The Plugin Pattern)
 
-Want to build an extensible system? Just define an interface and ask for a slice of it. Flora will gather all implementations automatically without any manual array wiring.
+Building extensible systems usually requires tedious array wiring. With Flora, you simply define an interface, implement it multiple times, and request a slice `[]YourInterface`. Flora handles the aggregation.
 
 ```go
 package plugin
 
-import "github.com/soner3/flora"
+import "[github.com/soner3/flora](https://github.com/soner3/flora)"
 
 type Plugin interface { Execute() }
 
 type LoggerPlugin struct{ flora.Component }
 func NewLoggerPlugin() *LoggerPlugin { return &LoggerPlugin{} }
-func (p *LoggerPlugin) Execute() { /* ... */ }
+func (p *LoggerPlugin) Execute() {}
 
 type MetricsPlugin struct{ flora.Component }
 func NewMetricsPlugin() *MetricsPlugin { return &MetricsPlugin{} }
-func (p *MetricsPlugin) Execute() { /* ... */ }
+func (p *MetricsPlugin) Execute() {}
+
+// --- The Consumer ---
 
 type PluginManager struct {
     flora.Component
-    plugins []Plugin // Flora automatically injects BOTH LoggerPlugin and MetricsPlugin!
+    plugins []Plugin 
 }
 
+// Flora automatically discovers LoggerPlugin and MetricsPlugin,
+// bundles them into a slice, and injects them here!
 func NewPluginManager(plugins []Plugin) *PluginManager {
     return &PluginManager{plugins: plugins}
 }
 
 ```
 
-### 4. Prototypes (Runtime Instantiation)
+### 4. Prototypes (Dynamic Instantiation)
 
-Sometimes you don't want a Singleton. You want a fresh instance for every request, but you still want the DI container to resolve its deep dependencies (like DB connections).
+By default, Flora treats every component as a **Singleton** (one instance per container). If you need a fresh instance for every HTTP request, use the `prototype` scope.
+
+Flora will then provide a Factory closure, automatically resolving all deep dependencies inside the closure!
 
 ```go
 package report
 
-import "github.com/soner3/flora"
+import "[github.com/soner3/flora](https://github.com/soner3/flora)"
 
 type PdfGenerator struct {
-    flora.Component `flora:"scope=prototype"` // Note the scope!
+    flora.Component `flora:"scope=prototype"` // Change scope to prototype
     db *sql.DB
 }
 
-// The DB is injected by Flora, but the instance is created on demand
 func NewPdfGenerator(db *sql.DB) (*PdfGenerator, func(), error) {
     return &PdfGenerator{db: db}, func() { println("Cleaned up temp files") }, nil
 }
 
-// --- In your HTTP Handler ---
-
+// --- The Consumer ---
 type ReportService struct {
     flora.Component
-    // We request a FACTORY function, not the struct!
+    // Ask for a factory function instead of the struct directly!
     pdfFactory func() (*PdfGenerator, func(), error) 
 }
 
@@ -166,95 +198,92 @@ func NewReportService(factory func() (*PdfGenerator, func(), error)) *ReportServ
 }
 
 func (s *ReportService) HandleRequest() {
-    // Generate a fresh instance with its dependencies already wired!
+    // Calling the factory creates a fresh PdfGenerator, but Flora 
+    // already wired the *sql.DB into it behind the scenes!
     pdf, cleanup, err := s.pdfFactory()
-    if err != nil { /* handle */ }
     defer cleanup() 
-    
-    // ... use pdf ...
 }
 
 ```
 
 ---
 
-## 🚀 Generating and Running
+## 🚀 Generating the Container
 
-Run the Flora CLI in your project root to scan your codebase and generate the Wire container:
+Once your components are marked, run the Flora CLI in your project root:
 
 ```bash
-flora gen -d ./ -o ./
+# Scans the current directory and places flora_container.go in ./cmd/server
+flora generate --input ./ --output ./cmd/server
 
 ```
 
-*Flora generates a `flora_container.go` file. Wire is automatically executed under the hood.*
+Flora acts as the brain. It resolves the AST, validates the graph, and orchestrates Google Wire to generate a flawless, human-readable `flora_container.go`.
 
-Initialize your app in your `main.go`:
+Now, simply boot your app:
 
 ```go
 package main
 
+import "yourproject/cmd/server"
+
 func main() {
     // 100% statically typed, no reflection, full performance.
-    container, cleanup, err := InitializeContainer()
+    container, cleanup, err := server.InitializeContainer()
     if err != nil {
         panic(err)
     }
-    defer cleanup() // Cleans up all DB connections and resources gracefully
+    defer cleanup() // Safely closes all DBs, connections, and files
 
-    container.UserService.DoSomething()
+    container.UserService.Start()
 }
 
 ```
 
 ---
 
-## 🛠 Configuration Reference
+<div align="center">
+<img src="https://github.com/user-attachments/assets/78c5ff4d-7441-4ba0-a476-50754f96de55" alt="Flora Ecosystem" width="100%" />
+</div>
 
-### Struct Tags (For `flora.Component`)
+## 🌍 The Flora Ecosystem
+
+Whether you are building a small CLI tool or a massive microservice architecture—Flora scales with you. By moving dependency definitions directly to the components, your architecture remains clean, decoupled, and easily testable.
+
+## ⚙️ Configuration Reference
+
+### Struct Tags (`flora.Component`)
 
 | Tag | Example | Description |
 | --- | --- | --- |
 | `constructor` | `flora:"constructor=BuildApp"` | Overrides the default `New<StructName>` lookup. |
 | `primary` | `flora:"primary"` | Resolves interface collisions. The primary struct wins. |
 | `scope` | `flora:"scope=prototype"` | Sets the lifecycle. Default is `singleton`. |
+| `order` | `flora:"order=1"` | Defines sorting order when injected via Slice (`[]Interface`). |
 | (Empty) | `flora:""` | Explicitly marks a component with default rules. |
 
-### Magic Comments (For `flora.Configuration` methods)
+### Magic Comments (`flora.Configuration`)
 
-Comments must be placed directly above the method definition.
+Must be placed directly above the configuration method.
+
 | Comment | Description |
 | --- | --- |
-| `// flora:primary` | Marks the provided type as the primary implementation. |
-| `// flora:scope=prototype` | Changes the lifecycle of the provided object to a factory. |
-
----
-
-## ❓ FAQ & Design Philosophy
-
-### Why does Flora use both Struct Tags AND Magic Comments? Isn't that inconsistent?
-At first glance, using struct tags for `@Component` and magic comments for `@Configuration` might look inconsistent. However, this is a deliberate, highly idiomatic design choice tailored specifically for Go.
-
-* **Struct Tags for Domain Code:** Go natively supports metadata on structs via tags (like `json` or `gorm`). For domain services where you define the struct, Flora uses tags because it is the most robust, compiler-checked way to attach metadata in Go.
-* **Magic Comments for Infrastructure:** Go strictly forbids tags on functions. To provide Spring-like `@Bean` factories for external, third-party types (like `*sql.DB`), Flora uses Magic Comments (`// flora:primary`). This follows the exact same pattern used by official Go tools like `//go:generate` or `//go:embed`. Flora simply uses the right Go-native tool for the right job.
-
-### Why can't I just create a wrapper struct with `flora.Component` for external types?
-Technically, you could create a `DBWrapper` struct that embeds `flora.Component` and holds a `*sql.DB`. But this leads to **Type Pollution**. 
-
-If you do this, your consumers can no longer request `*sql.DB` in their constructors; they are forced to request `*DBWrapper`. This tightly couples your clean domain logic to boilerplate wrapper structs. 
-
-By using `flora.Configuration` and factory methods, Flora injects the actual standard types (`*sql.DB`, `*redis.Client`) directly into the container, keeping your domain code 100% clean and agnostic of the DI framework.
-
-**Architectural Clarity:** Furthermore, this approach naturally enforces a clean project structure. Instead of scattering random wrapper structs across your codebase, `flora.Configuration` guides you to group your infrastructure setup into dedicated configuration files (e.g., `DatabaseConfig`, `AWSConfig`). This makes it immediately obvious to any developer where and how external dependencies are wired into the application.
+| `// flora:primary` | Marks the returned type as the primary implementation to resolve collisions. |
+| `// flora:scope=prototype` | Changes the lifecycle to a factory function (fresh instance per call). |
+| `// flora:order=1` | Defines the sorting order when the type is injected via Slice (`[]Interface`). |
+| `// flora:primary,scope=prototype` | You can combine multiple instructions separated by commas. |
 
 ---
 
 ## 📜 License
 
-Flora is released under the [Apache 2.0 License](https://www.google.com/search?q=LICENSE).
+Flora is released under the **Apache 2.0 License**.
+
+Copyright © 2026 Soner Astan.
 
 ## 🙏 Acknowledgments
 
-Flora is built on top of the incredible [Google Wire](https://github.com/google/wire) project.
+Flora builds its foundation upon [Google Wire](https://github.com/google/wire). While Flora provides the auto-discovery, AST parsing, and the highly automated developer experience, the actual generation of the static dependency graph is powered by Wire.
+Lies es dir in Ruhe durch. Trifft diese Struktur genau den "Aha!"-Moment, den Entwickler beim Lesen deines Repositories haben sollen?
 
-While Flora provides the auto-discovery, parsing, and the Spring-like developer experience, the actual heavy lifting of safely generating the static, compile-time dependency graph is powered by Wire.
+```
