@@ -52,71 +52,101 @@ func NewWireGenerator() *WireGenerator {
 	return &WireGenerator{}
 }
 
+func isBuiltInType(name string) bool {
+	switch name {
+	case "int", "int8", "int16", "int32", "int64",
+		"uint", "uint8", "uint16", "uint32", "uint64", "uintptr",
+		"float32", "float64", "complex64", "complex128",
+		"bool", "string", "error", "any", "byte", "rune":
+		return true
+	}
+	return false
+}
+
 var wireTemplate = `//go:build wireinject
 // +build wireinject
 
 package {{.PackageName}}
 
 import (
-	"github.com/google/wire"
-	{{range .Imports}}
-	"{{.}}"
-	{{end}}
+    "github.com/google/wire"
+    {{range .Imports}}
+    "{{.}}"
+    {{end}}
 )
 
-{{range .Prototypes}}
+{{range .ConfigWrappers}}
+{{if .IsPrototype}}
 func {{.WrapperName}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.Name}} {{$param.Type}}{{end}}) func() ({{.ReturnType}}{{if .HasCleanup}}, func(){{end}}{{if .HasError}}, error{{end}}) {
-	return func() ({{.ReturnType}}{{if .HasCleanup}}, func(){{end}}{{if .HasError}}, error{{end}}) {
-		return {{.ConstructorCall}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.Name}}{{end}})
-	}
+    return func() ({{.ReturnType}}{{if .HasCleanup}}, func(){{end}}{{if .HasError}}, error{{end}}) {
+        cfg := {{.ConfigPackagePrefix}}{{.ConfigStructName}}{}
+        return cfg.{{.ConfigMethodName}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.Name}}{{end}})
+    }
 }
+{{else}}
+func {{.WrapperName}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.Name}} {{$param.Type}}{{end}}) ({{.ReturnType}}{{if .HasCleanup}}, func(){{end}}{{if .HasError}}, error{{end}}) {
+    cfg := {{.ConfigPackagePrefix}}{{.ConfigStructName}}{}
+    return cfg.{{.ConfigMethodName}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.Name}}{{end}})
+}
+{{end}}
+{{end}}
+
+{{range .Prototypes}}
+{{if not .IsConfig}}
+func {{.WrapperName}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.Name}} {{$param.Type}}{{end}}) func() ({{.ReturnType}}{{if .HasCleanup}}, func(){{end}}{{if .HasError}}, error{{end}}) {
+    return func() ({{.ReturnType}}{{if .HasCleanup}}, func(){{end}}{{if .HasError}}, error{{end}}) {
+        return {{.ConstructorCall}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.Name}}{{end}})
+    }
+}
+{{end}}
 {{end}}
 
 {{range .SliceBindings}}
 func ProvideSliceOf{{.InterfaceName}}({{range .Implementations}}{{.ParamName}} {{.TypePrefix}}{{.StructName}}, {{end}}) []{{.InterfacePrefix}}{{.InterfaceName}} {
-	return []{{.InterfacePrefix}}{{.InterfaceName}}{
-		{{range .Implementations}}{{.ParamName}},{{end}}
-	}
+    return []{{.InterfacePrefix}}{{.InterfaceName}}{
+        {{range .Implementations}}{{.ParamName}},{{end}}
+    }
 }
 {{end}}
 
 type FloraContainer struct {
-	{{range .Providers}}
-	{{.StructName}} {{if .IsPointer}}*{{end}}{{.PackagePrefix}}{{.StructName}}
-	{{end}}
-	
-	{{range .Prototypes}}
-	{{.FieldName}} func() ({{.ReturnType}}{{if .HasCleanup}}, func(){{end}}{{if .HasError}}, error{{end}})
-	{{end}}
+    {{range .Providers}}
+    {{.StructName}} {{if .IsPointer}}*{{end}}{{.TypePrefix}}{{.StructName}}
+    {{end}}
+    
+    {{range .Prototypes}}
+    {{.FieldName}} func() ({{.ReturnType}}{{if .HasCleanup}}, func(){{end}}{{if .HasError}}, error{{end}})
+    {{end}}
 
-	{{range .SliceBindings}}
-	SliceOf{{.InterfaceName}} []{{.InterfacePrefix}}{{.InterfaceName}}
-	{{end}}
+    {{range .SliceBindings}}
+    SliceOf{{.InterfaceName}} []{{.InterfacePrefix}}{{.InterfaceName}}
+    {{end}}
 }
 
 func InitializeContainer() (*FloraContainer, func(), error) {
-	wire.Build(
-		{{range .Providers}}
-		{{.PackagePrefix}}{{.ConstructorName}},
-		{{end}}
-		{{range .Prototypes}}
-		{{.WrapperName}},
-		{{end}}
-		{{range .Bindings}}
-		wire.Bind(new({{.InterfacePrefix}}{{.InterfaceName}}), new({{if .IsPointer}}*{{end}}{{.ComponentPrefix}}{{.StructName}})),
-		{{end}}
-		{{range .SliceBindings}}
-		ProvideSliceOf{{.InterfaceName}},
-		{{end}}
-		wire.Struct(new(FloraContainer), "*"),
-	)
-	return nil, nil, nil
+    wire.Build(
+        {{range .Providers}}
+        {{.CallPrefix}}{{.ConstructorName}},
+        {{end}}
+        {{range .Prototypes}}
+        {{.WrapperName}},
+        {{end}}
+        {{range .Bindings}}
+        wire.Bind(new({{.InterfacePrefix}}{{.InterfaceName}}), new({{if .IsPointer}}*{{end}}{{.ComponentPrefix}}{{.StructName}})),
+        {{end}}
+        {{range .SliceBindings}}
+        ProvideSliceOf{{.InterfaceName}},
+        {{end}}
+        wire.Struct(new(FloraContainer), "*"),
+    )
+    return nil, nil, nil
 }
 `
 
 type providerData struct {
 	StructName      string
-	PackagePrefix   string
+	CallPrefix      string
+	TypePrefix      string
 	ConstructorName string
 	IsPointer       bool
 }
@@ -134,6 +164,19 @@ type prototypeData struct {
 	Params          []paramData
 	HasCleanup      bool
 	HasError        bool
+	IsConfig        bool
+}
+
+type configWrapperData struct {
+	WrapperName         string
+	ConfigPackagePrefix string
+	ConfigStructName    string
+	ConfigMethodName    string
+	ReturnType          string
+	Params              []paramData
+	HasCleanup          bool
+	HasError            bool
+	IsPrototype         bool
 }
 
 type bindingData struct {
@@ -157,12 +200,13 @@ type sliceBindingData struct {
 }
 
 type templateData struct {
-	PackageName   string
-	Imports       []string
-	Providers     []providerData
-	Prototypes    []prototypeData
-	Bindings      []bindingData
-	SliceBindings []sliceBindingData
+	PackageName    string
+	Imports        []string
+	Providers      []providerData
+	Prototypes     []prototypeData
+	ConfigWrappers []configWrapperData
+	Bindings       []bindingData
+	SliceBindings  []sliceBindingData
 }
 
 func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext) error {
@@ -207,12 +251,16 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 
 	var providers []providerData
 	var prototypes []prototypeData
+	var configWrappers []configWrapperData
 	var bindings []bindingData
 	importSet := make(map[string]bool)
 
 	for _, comp := range genCtx.Components {
+		isConfig := comp.ConfigStructName != ""
+		isBuiltIn := isBuiltInType(comp.StructName)
+
 		compPrefix := ""
-		if comp.PackageName != pkgName {
+		if comp.PackageName != pkgName && !isBuiltIn {
 			if comp.PackageName == "main" {
 				return errs.Wrap(ErrMainComponentLeak, "cannot generate container in package '%s' because component '%s' belongs to package 'main'. Change output dir (-o) to your main directory or move the component.", pkgName, comp.StructName)
 			}
@@ -220,37 +268,62 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 			importSet[comp.PackagePath] = true
 		}
 
+		configPkgPrefix := ""
+		if isConfig {
+			if comp.ConfigPackageName != pkgName {
+				if comp.ConfigPackageName == "main" {
+					return errs.Wrap(ErrMainComponentLeak, "cannot generate container because config '%s' belongs to package 'main'.", comp.ConfigStructName)
+				}
+				configPkgPrefix = comp.ConfigPackageName + "."
+				importSet[comp.ConfigPackagePath] = true
+			}
+		}
+
+		var pData []paramData
 		for _, p := range comp.Params {
 			for _, imp := range p.Imports {
 				importSet[imp] = true
 			}
+			pType := p.Type
+			pType = strings.ReplaceAll(pType, "*"+pkgName+".", "*")
+			pType = strings.ReplaceAll(pType, "[]"+pkgName+".", "[]")
+			if after, ok := strings.CutPrefix(pType, pkgName+"."); ok {
+				pType = after
+			}
+			pData = append(pData, paramData{Name: p.Name, Type: pType})
+		}
+
+		retType := compPrefix + comp.StructName
+		if comp.IsPointer {
+			retType = "*" + retType
 		}
 
 		if comp.Scope == "prototype" {
-			var pData []paramData
-			for _, p := range comp.Params {
-				pType := p.Type
-				pType = strings.ReplaceAll(pType, "*"+pkgName+".", "*")
-				pType = strings.ReplaceAll(pType, "[]"+pkgName+".", "[]")
-				if after, ok := strings.CutPrefix(pType, pkgName+"."); ok {
-					pType = after
-				}
-				pData = append(pData, paramData{Name: p.Name, Type: pType})
-			}
-
-			retType := compPrefix + comp.StructName
-			if comp.IsPointer {
-				retType = "*" + retType
+			wrapperName := "ProvidePrototype" + comp.StructName
+			if isConfig {
+				wrapperName = "ProvidePrototype_" + comp.ConfigStructName + "_" + comp.ConfigMethodName
+				configWrappers = append(configWrappers, configWrapperData{
+					WrapperName:         wrapperName,
+					ConfigPackagePrefix: configPkgPrefix,
+					ConfigStructName:    comp.ConfigStructName,
+					ConfigMethodName:    comp.ConfigMethodName,
+					ReturnType:          retType,
+					Params:              pData,
+					HasCleanup:          comp.HasCleanup,
+					HasError:            comp.HasError,
+					IsPrototype:         true,
+				})
 			}
 
 			prototypes = append(prototypes, prototypeData{
-				WrapperName:     "ProvidePrototype" + comp.StructName,
+				WrapperName:     wrapperName,
 				FieldName:       comp.StructName + "Factory",
 				ConstructorCall: compPrefix + comp.ConstructorName,
 				ReturnType:      retType,
 				Params:          pData,
 				HasCleanup:      comp.HasCleanup,
 				HasError:        comp.HasError,
+				IsConfig:        isConfig,
 			})
 
 			for _, iface := range comp.Implements {
@@ -271,14 +344,34 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 					Params:          pData,
 					HasCleanup:      comp.HasCleanup,
 					HasError:        comp.HasError,
+					IsConfig:        isConfig,
 				})
 			}
 
 		} else {
+			wrapperName := comp.ConstructorName
+			callPrefix := compPrefix
+
+			if isConfig {
+				callPrefix = ""
+				configWrappers = append(configWrappers, configWrapperData{
+					WrapperName:         wrapperName,
+					ConfigPackagePrefix: configPkgPrefix,
+					ConfigStructName:    comp.ConfigStructName,
+					ConfigMethodName:    comp.ConfigMethodName,
+					ReturnType:          retType,
+					Params:              pData,
+					HasCleanup:          comp.HasCleanup,
+					HasError:            comp.HasError,
+					IsPrototype:         false,
+				})
+			}
+
 			providers = append(providers, providerData{
 				StructName:      comp.StructName,
-				PackagePrefix:   compPrefix,
-				ConstructorName: comp.ConstructorName,
+				CallPrefix:      callPrefix,
+				TypePrefix:      compPrefix,
+				ConstructorName: wrapperName,
 				IsPointer:       comp.IsPointer,
 			})
 
@@ -340,8 +433,9 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 
 	data.Providers = providers
 	data.Prototypes = prototypes
-	data.SliceBindings = sliceBindingsData
+	data.ConfigWrappers = configWrappers
 	data.Bindings = bindings
+	data.SliceBindings = sliceBindingsData
 
 	for imp := range importSet {
 		if generatedPkgPath != "" && imp == generatedPkgPath {

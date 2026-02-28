@@ -17,10 +17,9 @@ package scanner
 
 import (
 	"errors"
-	"go/types"
 	"testing"
 
-	"golang.org/x/tools/go/packages"
+	"github.com/soner3/flora/internal/engine"
 )
 
 func TestParsePackages(t *testing.T) {
@@ -117,7 +116,7 @@ func TestParsePackages(t *testing.T) {
 		{
 			name:         "TestParsePackagesInvalidScope",
 			testdataPath: "testdata/err_invalid_scope",
-			expErr:       ErrInvalidScope,
+			expErr:       ErrInvalidMetadata,
 		},
 		{
 			name:         "TestParsePackagesHappyQualifier",
@@ -137,7 +136,32 @@ func TestParsePackages(t *testing.T) {
 		{
 			name:         "TestParsePackagesInvalidOrder",
 			testdataPath: "testdata/err_invalid_order",
-			expErr:       ErrInvalidOrder,
+			expErr:       ErrInvalidMetadata,
+		},
+		{
+			name:         "TestParsePackagesConfigInvalidScope",
+			testdataPath: "testdata/err_config_scope",
+			expErr:       ErrInvalidMetadata,
+		},
+		{
+			name:         "TestParsePackagesUnexportedPrefix",
+			testdataPath: "testdata/err_unexported_prefix",
+			expErr:       ErrInvalidMetadata,
+		},
+		{
+			name:         "TestParsePackagesUnexportedPositional",
+			testdataPath: "testdata/err_unexported_pos",
+			expErr:       ErrInvalidMetadata,
+		},
+		{
+			name:         "TestParsePackagesErrConfigProvider",
+			testdataPath: "testdata/err_config_provider",
+			expErr:       ErrInvalidProviderFunc,
+		},
+		{
+			name:         "TestParsePackagesHappyConfig",
+			testdataPath: "testdata/happy",
+			expErr:       nil,
 		},
 	}
 
@@ -168,19 +192,33 @@ func TestParsePackages(t *testing.T) {
 	}
 }
 
-func TestProcessComponent_UnknownMarker(t *testing.T) {
-	fakeComp := &componentInfo{
-		Marker: "some.unknown/marker.Component",
-		Name:   "FakeComponent",
-		Pkg:    &packages.Package{Name: "fake"},
+func TestIsExported(t *testing.T) {
+	testcases := []struct {
+		name      string
+		component *engine.ComponentMetadata
+		expErr    error
+	}{
+		{name: "TestSuccessfull", component: &engine.ComponentMetadata{ConstructorName: "Success"}, expErr: nil},
+		{name: "TestNotExportet", component: &engine.ComponentMetadata{ConstructorName: "fail"}, expErr: ErrInvalidMetadata},
+		{name: "TestEmpty", component: &engine.ComponentMetadata{ConstructorName: ""}, expErr: ErrInvalidMetadata},
 	}
 
-	neededIfaces := make(map[string]types.Type)
-	neededSlices := make(map[string]types.Type)
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := isExported(tc.component)
+			if tc.expErr == nil {
+				if err != nil {
+					t.Errorf("expected %v, got %v instead", tc.expErr, err)
 
-	_, err := processComponent(fakeComp, &neededIfaces, &neededSlices)
+				}
+			} else {
+				if !errors.Is(err, ErrInvalidMetadata) {
+					t.Errorf("expected %v, got %v instead", tc.expErr, err)
 
-	if !errors.Is(err, ErrUnknownMarker) {
-		t.Errorf("expected ErrUnknownMarker, got %v", err)
+				}
+			}
+		})
+
 	}
+
 }

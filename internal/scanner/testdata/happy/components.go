@@ -103,3 +103,34 @@ type ComponentWithBoth struct {
 }
 
 func NewComponentWithBoth() (*ComponentWithBoth, func(), error) { return nil, nil, nil }
+
+type MyConfig struct {
+	flora.Configuration
+}
+
+func (c *MyConfig) ProvideString() string {
+	return "hello"
+}
+
+// flora:primary,scope=prototype
+func (c *MyConfig) ProvideInt() int {
+	return 42
+}
+
+func (c *MyConfig) unexportedMethod() float64 {
+	return 3.14
+}
+
+type CustomStruct struct{}
+
+type AppConfig struct {
+	flora.Configuration
+}
+
+func (c AppConfig) ProvideCustomStruct() CustomStruct {
+	return CustomStruct{}
+}
+
+func (c AppConfig) ProvidePointerStruct() *CustomStruct {
+	return &CustomStruct{}
+}

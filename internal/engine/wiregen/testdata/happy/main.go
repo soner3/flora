@@ -42,3 +42,33 @@ func (c *C) Do() {}
 type Consumer struct{ flora.Component }
 
 func NewConsumer(i func() Iface) *Consumer { return nil }
+
+type MyReader interface {
+	Read(p []byte) (n int, err error)
+}
+
+type MyDummy struct{}
+
+func (d *MyDummy) Read(p []byte) (n int, err error) { return 0, nil }
+
+type AppConfig struct {
+	flora.Configuration
+}
+
+func (c *AppConfig) ProvideString() string {
+	return "hello"
+}
+
+// flora:scope=prototype
+func (c *AppConfig) ProvideInt() int {
+	return 42
+}
+
+func (c *AppConfig) ProvideComplex(prefix string) (*MyDummy, func(), error) {
+	return &MyDummy{}, func() {}, nil
+}
+
+// flora:scope=prototype
+func (c *AppConfig) ProvideReader() (MyReader, func(), error) {
+	return &MyDummy{}, func() {}, nil
+}

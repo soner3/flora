@@ -18,6 +18,7 @@ package scanner
 import (
 	"errors"
 	"fmt"
+	"go/ast"
 	"go/types"
 	"log/slog"
 	"math"
@@ -25,6 +26,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/soner3/flora/internal/engine"
 	"github.com/soner3/flora/internal/errs"
@@ -34,20 +36,19 @@ import (
 var (
 	ErrProviderFuncNotFound = errors.New("provider not found")
 	ErrInvalidProviderFunc  = errors.New("invalid provider func")
-	ErrUnknownMarker        = errors.New("unknown marker")
 	ErrInterfaceCollision   = errors.New("interface collision")
 	ErrInvalidInterface     = errors.New("invalid interface")
 	ErrNoImplementation     = errors.New("no component implements interface")
 	ErrInvalidSlice         = errors.New("invalid slice")
-	ErrInvalidScope         = errors.New("invalid scope")
-	ErrInvalidOrder         = errors.New("invalid order")
+	ErrInvalidMetadata      = errors.New("invalid metadata")
 )
 
 const (
 	ScopeSingleton = "singleton"
 	ScopePrototype = "prototype"
 
-	ComponentMarker = "github.com/soner3/flora.Component"
+	ComponentMarker     = "github.com/soner3/flora.Component"
+	ConfigurationMarker = "github.com/soner3/flora.Configuration"
 )
 
 var scopes = []string{
@@ -57,6 +58,7 @@ var scopes = []string{
 
 var markers = []string{
 	ComponentMarker,
+	ConfigurationMarker,
 }
 
 type scannedComponent struct {
@@ -89,11 +91,21 @@ func ParsePackages(pkgs []*packages.Package) (*engine.GeneratorContext, error) {
 	scannedComponents := make([]*scannedComponent, 0)
 
 	for _, compInfo := range *compInfos {
-		scannedComp, err := processComponent(&compInfo, &neededInterfaces, &neededSlices)
-		if err != nil {
-			return nil, err
+		switch compInfo.Marker {
+		case ComponentMarker:
+			scannedComp, err := processComponent(&compInfo, &neededInterfaces, &neededSlices)
+			if err != nil {
+				return nil, err
+			}
+			scannedComponents = append(scannedComponents, scannedComp)
+		case ConfigurationMarker:
+			scannedComps, err := processConfiguration(&compInfo, &neededInterfaces, &neededSlices)
+			if err != nil {
+				return nil, err
+			}
+			scannedComponents = append(scannedComponents, scannedComps...)
 		}
-		scannedComponents = append(scannedComponents, scannedComp)
+
 	}
 
 	log.Debug("Resolving interface implementations", "interfaces_needed", len(neededInterfaces))
@@ -170,7 +182,9 @@ func isMarkedWith(structType *types.Struct) (bool, string, string) {
 
 // parseFloraTag parses the flora tag and sets the metadata accordingly
 func parseFloraTag(rawTag string, metadata *engine.ComponentMetadata) error {
-	metadata.ConstructorName = "New" + metadata.StructName
+	if metadata.ConfigStructName == "" {
+		metadata.ConstructorName = "New" + metadata.StructName
+	}
 	metadata.IsPrimary = false
 	metadata.Scope = ScopeSingleton
 	metadata.Order = math.MaxInt32
@@ -196,22 +210,34 @@ func parseFloraTag(rawTag string, metadata *engine.ComponentMetadata) error {
 		case part == "primary":
 			metadata.IsPrimary = true
 		case strings.HasPrefix(part, "constructor="):
-			metadata.ConstructorName = strings.TrimPrefix(part, "constructor=")
+			if metadata.ConfigStructName == "" {
+				metadata.ConstructorName = strings.TrimPrefix(part, "constructor=")
+			}
+
+			if err := isExported(metadata); err != nil {
+				return err
+			}
 		case strings.HasPrefix(part, "scope="):
 			scope := strings.TrimPrefix(part, "scope=")
 			if !slices.Contains(scopes, scope) {
-				return errs.Wrap(ErrInvalidScope, "invalid scope '%s' for component '%s' in package '%s'", scope, metadata.StructName, metadata.PackageName)
+				return errs.Wrap(ErrInvalidMetadata, "invalid scope '%s' for component '%s' in package '%s'", scope, metadata.StructName, metadata.PackageName)
 			}
 			metadata.Scope = scope
 		case strings.HasPrefix(part, "order="):
 			orderStr := strings.TrimPrefix(part, "order=")
 			order, err := strconv.Atoi(orderStr)
 			if err != nil {
-				return errs.Wrap(ErrInvalidOrder, "invalid order '%s' for component '%s' in package '%s' (must be an integer)", orderStr, metadata.StructName, metadata.PackageName)
+				return errs.Wrap(ErrInvalidMetadata, "invalid order '%s' for component '%s' in package '%s' (must be an integer)", orderStr, metadata.StructName, metadata.PackageName)
 			}
 			metadata.Order = order
 		default:
-			metadata.ConstructorName = part
+			if metadata.ConfigStructName == "" {
+				metadata.ConstructorName = part
+			}
+
+			if err := isExported(metadata); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -226,28 +252,21 @@ func processComponent(compInfo *componentInfo, neededInterfaces, neededSlices *m
 		PackagePath: compInfo.Pkg.PkgPath,
 	}
 
-	switch compInfo.Marker {
-	case ComponentMarker:
-		if err := parseFloraTag(compInfo.Tag, metadata); err != nil {
-			return nil, err
-		}
-
-		obj := compInfo.Pkg.Types.Scope().Lookup(metadata.ConstructorName)
-
-		err := processProviderFunc(compInfo, metadata, obj, neededInterfaces, neededSlices)
-		if err != nil {
-			return nil, err
-		}
-
-		return &scannedComponent{
-			Metadata: metadata,
-			PtrType:  types.NewPointer(compInfo.TypeName.Type()),
-		}, nil
-	default:
-		chainErr := fmt.Errorf("%w: %v", ErrUnknownMarker, compInfo.Marker)
-		return nil, errs.Wrap(chainErr, "unknown marker '%s' for component '%s' in package '%s'",
-			compInfo.Marker, compInfo.Name, compInfo.Pkg.Name)
+	if err := parseFloraTag(compInfo.Tag, metadata); err != nil {
+		return nil, err
 	}
+
+	obj := compInfo.Pkg.Types.Scope().Lookup(metadata.ConstructorName)
+
+	err := processProviderFunc(compInfo, metadata, obj, neededInterfaces, neededSlices)
+	if err != nil {
+		return nil, err
+	}
+
+	return &scannedComponent{
+		Metadata: metadata,
+		PtrType:  types.NewPointer(compInfo.TypeName.Type()),
+	}, nil
 
 }
 
@@ -343,10 +362,22 @@ func validateProviderFunc(compInfo *componentInfo, metadata *engine.ComponentMet
 		baseRetType = firstType
 	}
 
-	if !types.Identical(baseRetType, compInfo.TypeName.Type()) {
-		chainErr := fmt.Errorf("%w: %v", ErrInvalidProviderFunc, firstType)
-		return nil, errs.Wrap(chainErr, "invalid provider func: '%s' returns '%s', but must return '%s' or '*%s'",
-			metadata.ConstructorName, firstType.String(), compInfo.TypeName.Name(), compInfo.TypeName.Name())
+	if metadata.ConfigStructName == "" {
+		if !types.Identical(baseRetType, compInfo.TypeName.Type()) {
+			chainErr := fmt.Errorf("%w: %v", ErrInvalidProviderFunc, firstType)
+			return nil, errs.Wrap(chainErr, "invalid provider func: '%s' returns '%s', but must return '%s' or '*%s'",
+				metadata.ConstructorName, firstType.String(), compInfo.TypeName.Name(), compInfo.TypeName.Name())
+		}
+	} else {
+		if named, ok := baseRetType.(*types.Named); ok {
+			metadata.StructName = named.Obj().Name()
+			metadata.PackageName = named.Obj().Pkg().Name()
+			metadata.PackagePath = named.Obj().Pkg().Path()
+		} else {
+			metadata.StructName = baseRetType.String()
+			metadata.PackageName = compInfo.Pkg.Name
+			metadata.PackagePath = compInfo.Pkg.PkgPath
+		}
 	}
 
 	params := sig.Params()
@@ -540,4 +571,102 @@ func validateReturnValues(sig *types.Signature, constructorName, structName, pkg
 	}
 
 	return hasCleanup, hasErr, nil
+}
+
+// processConfiguration scans a flora.Configuration struct for methods with magic comments
+func processConfiguration(compInfo *componentInfo, neededInterfaces, neededSlices *map[string]types.Type) ([]*scannedComponent, error) {
+	var results []*scannedComponent
+
+	for _, file := range compInfo.Pkg.Syntax {
+		for _, decl := range file.Decls {
+			funcDecl, ok := decl.(*ast.FuncDecl)
+			if !ok || funcDecl.Recv == nil || len(funcDecl.Recv.List) == 0 {
+				continue
+			}
+
+			recvType := funcDecl.Recv.List[0].Type
+			var recvName string
+			switch t := recvType.(type) {
+			case *ast.Ident:
+				recvName = t.Name
+			case *ast.StarExpr:
+				if ident, ok := t.X.(*ast.Ident); ok {
+					recvName = ident.Name
+				}
+			}
+
+			if recvName != compInfo.Name {
+				continue
+			}
+
+			methodName := funcDecl.Name.Name
+
+			if !ast.IsExported(methodName) {
+				continue
+			}
+
+			var floraTag string
+			if funcDecl.Doc != nil {
+				for _, comment := range funcDecl.Doc.List {
+					text := strings.TrimSpace(comment.Text)
+					if after, ok0 := strings.CutPrefix(text, "// flora:"); ok0 {
+						floraTag = strings.TrimSpace(after)
+						break
+					}
+				}
+			}
+
+			obj := compInfo.Pkg.TypesInfo.Defs[funcDecl.Name]
+
+			metadata := &engine.ComponentMetadata{
+				ConfigStructName:  compInfo.Name,
+				ConfigMethodName:  methodName,
+				ConfigPackageName: compInfo.Pkg.Name,
+				ConfigPackagePath: compInfo.Pkg.PkgPath,
+				ConstructorName:   fmt.Sprintf("Provide_%s_%s", compInfo.Name, methodName),
+			}
+
+			var tagToParse string
+			if floraTag != "" {
+				tagToParse = fmt.Sprintf(`flora:"%s"`, floraTag)
+			}
+
+			if err := parseFloraTag(tagToParse, metadata); err != nil {
+				return nil, err
+			}
+
+			if err := processProviderFunc(compInfo, metadata, obj, neededInterfaces, neededSlices); err != nil {
+				return nil, err
+			}
+
+			sig := obj.(*types.Func).Type().(*types.Signature)
+			retType := sig.Results().At(0).Type()
+			var ptrType *types.Pointer
+			if ptr, isPtr := retType.(*types.Pointer); isPtr {
+				ptrType = ptr
+			} else {
+				ptrType = types.NewPointer(retType)
+			}
+
+			results = append(results, &scannedComponent{
+				Metadata: metadata,
+				PtrType:  ptrType,
+			})
+		}
+	}
+
+	return results, nil
+}
+
+func isExported(metadata *engine.ComponentMetadata) error {
+	if len(metadata.ConstructorName) > 0 {
+		r := []rune(metadata.ConstructorName)
+		if !unicode.IsUpper(r[0]) {
+			return errs.Wrap(ErrInvalidMetadata, "unexported constructor '%s' for component '%s' in package '%s'", metadata.ConstructorName, metadata.StructName, metadata.PackageName)
+		}
+	} else {
+		return errs.Wrap(ErrInvalidMetadata, "invalid constructor '%s' for component '%s' in package '%s'", metadata.ConstructorName, metadata.StructName, metadata.PackageName)
+	}
+
+	return nil
 }

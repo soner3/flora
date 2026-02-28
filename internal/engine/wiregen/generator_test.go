@@ -379,6 +379,23 @@ func TestGenerate(t *testing.T) {
 			},
 			expErr: ErrWireExecution,
 		},
+		{
+			name: "TestConfigInMainLeak",
+			setupDir: func(t *testing.T) string {
+				return t.TempDir()
+			},
+			genCtx: &engine.GeneratorContext{
+				Components: []*engine.ComponentMetadata{
+					{
+						StructName:        "DB",
+						PackageName:       "sql",
+						ConfigStructName:  "AppConfig",
+						ConfigPackageName: "main",
+					},
+				},
+			},
+			expErr: ErrMainComponentLeak,
+		},
 	}
 
 	for _, tc := range testcases {

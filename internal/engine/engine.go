@@ -28,18 +28,22 @@ type ParamMetadata struct {
 }
 
 type ComponentMetadata struct {
-	PackageName     string
-	PackagePath     string
-	StructName      string
-	ConstructorName string
-	IsPrimary       bool
-	Scope           string
-	IsPointer       bool
-	HasCleanup      bool
-	HasError        bool
-	Order           int
-	Implements      []InterfaceMetadata
-	Params          []ParamMetadata
+	PackageName       string
+	PackagePath       string
+	StructName        string
+	ConstructorName   string
+	IsPrimary         bool
+	Scope             string
+	IsPointer         bool
+	HasCleanup        bool
+	HasError          bool
+	Order             int
+	ConfigStructName  string
+	ConfigMethodName  string
+	ConfigPackageName string
+	ConfigPackagePath string
+	Implements        []InterfaceMetadata
+	Params            []ParamMetadata
 }
 
 type SliceBindingMetadata struct {
