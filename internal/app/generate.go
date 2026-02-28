@@ -22,13 +22,13 @@ import (
 	"github.com/soner3/flora/internal/scanner"
 )
 
-func RunGenerate(dir, outDir string) error {
+func RunGenerate(inputDir, outputDir string) error {
 	log := slog.With("pkg", "app")
 
-	log.Info("Starting flora generation...", "dir", dir, "out", outDir)
+	log.Info("Starting flora generation...", "dir", inputDir, "out", outputDir)
 
 	log.Debug("Scanning packages for flora components...")
-	pkgs, err := scanner.ScanPackages(dir)
+	pkgs, err := scanner.ScanPackages(inputDir)
 	if err != nil {
 		return err
 	}
@@ -47,7 +47,7 @@ func RunGenerate(dir, outDir string) error {
 
 	log.Debug("Generating DI container...")
 	gen := wiregen.NewWireGenerator()
-	if err := gen.Generate(outDir, genCtx); err != nil {
+	if err := gen.Generate(outputDir, genCtx); err != nil {
 		return err
 	}
 

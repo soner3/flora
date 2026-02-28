@@ -24,8 +24,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var dir string
-var outDir string
+var inputDir string
+var outputDir string
 
 // generateCmd represents the generate command
 var generateCmd = &cobra.Command{
@@ -34,26 +34,24 @@ var generateCmd = &cobra.Command{
 	Short:        "Generate flora files",
 	Long:         `Generate flora files from the given directory.`,
 	SilenceUsage: true,
-
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		log := slog.With("pkg", "cmd")
 
-		log.Debug("Validating flags", "dir", dir, "out", outDir)
-		if _, err := os.Stat(dir); err != nil {
-			return errs.Wrap(err, "invalid directory provided for flag 'dir': %s", dir)
+		log.Debug("Validating flags", "input", inputDir, "output", outputDir)
+		if _, err := os.Stat(inputDir); err != nil {
+			return errs.Wrap(err, "invalid directory provided for flag 'input': %s", inputDir)
 		}
 
-		log.Debug("Flag is valid", "flag", "dir")
+		log.Debug("Flag is valid", "flag", "input")
 		return nil
 	},
-
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return app.RunGenerate(dir, outDir)
+		return app.RunGenerate(inputDir, outputDir)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(generateCmd)
-	generateCmd.Flags().StringVarP(&dir, "dir", "d", ".", "Directory to scan")
-	generateCmd.Flags().StringVarP(&outDir, "out", "o", "flora", "Output directory for the generated container")
+	generateCmd.Flags().StringVarP(&inputDir, "input", "i", ".", "Input directory to scan")
+	generateCmd.Flags().StringVarP(&outputDir, "output", "o", "flora", "Output directory for the generated container")
 }

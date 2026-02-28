@@ -29,8 +29,9 @@ var logLevel string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "flora",
-	Short: "Compile-time Dependency Injection for Go",
+	Use:     "flora",
+	Version: "v1.0.0",
+	Short:   "Compile-time Dependency Injection for Go",
 	Long: `A longer description that spans multiple lines and likely contains
 examples and usage of using your application. For example:
 
