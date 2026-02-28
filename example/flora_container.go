@@ -19,16 +19,29 @@ import (
 // Injectors from flora_injector.go:
 
 func InitializeContainer() (*FloraContainer, func(), error) {
-	configConfig := config.NewConfig()
-	v := ProvidePrototypePdfGeneratorAsDocumentGenerator(configConfig)
-	reportService := domain.NewReportService(v)
-	postgresRepository, cleanup, err := postgres.NewPostgresRepository(configConfig)
+	redisClient, cleanup, err := Provide_CacheConfig_ProvideRedisClient()
 	if err != nil {
 		return nil, nil, err
 	}
-	userService := domain.BuildUserService(postgresRepository, configConfig)
-	mysqlRepository, cleanup2, err := mysql.NewMysqlRepository(configConfig)
+	client, cleanup2, err := Provide_CacheConfig_ProvideDefaultClient(redisClient)
 	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	configConfig := config.NewConfig()
+	v := ProvidePrototypePdfGeneratorAsDocumentGenerator(configConfig)
+	reportService := domain.NewReportService(v)
+	postgresRepository, cleanup3, err := postgres.NewPostgresRepository(configConfig)
+	if err != nil {
+		cleanup2()
+		cleanup()
+		return nil, nil, err
+	}
+	userService := domain.BuildUserService(postgresRepository, configConfig)
+	mysqlRepository, cleanup4, err := mysql.NewMysqlRepository(configConfig)
+	if err != nil {
+		cleanup3()
+		cleanup2()
 		cleanup()
 		return nil, nil, err
 	}
@@ -36,23 +49,12 @@ func InitializeContainer() (*FloraContainer, func(), error) {
 	metricsPlugin := plugin.NewMetricsPlugin()
 	v2 := ProvideSliceOfPlugin(loggerPlugin, metricsPlugin)
 	pluginManager := plugin.NewPluginManager(v2)
-	redisClient, cleanup3, err := Provide_CacheConfig_ProvideRedisClient()
-	if err != nil {
-		cleanup2()
-		cleanup()
-		return nil, nil, err
-	}
-	client, cleanup4, err := Provide_CacheConfig_ProvideDefaultClient(redisClient)
-	if err != nil {
-		cleanup3()
-		cleanup2()
-		cleanup()
-		return nil, nil, err
-	}
-	v3 := ProvidePrototypeNonPrimaryDocumentGenerator(configConfig)
-	v4 := ProvidePrototypePdfGenerator(configConfig)
-	v5 := ProvidePrototype_CacheConfig_ProvideMemoryClient()
+	v3 := ProvidePrototype_CacheConfig_ProvideMemoryClient()
+	v4 := ProvidePrototypeNonPrimaryDocumentGenerator(configConfig)
+	v5 := ProvidePrototypePdfGenerator(configConfig)
 	floraContainer := &FloraContainer{
+		RedisClient:                        redisClient,
+		Client:                             client,
 		Config:                             configConfig,
 		ReportService:                      reportService,
 		UserService:                        userService,
@@ -61,12 +63,10 @@ func InitializeContainer() (*FloraContainer, func(), error) {
 		MetricsPlugin:                      metricsPlugin,
 		PluginManager:                      pluginManager,
 		PostgresRepository:                 postgresRepository,
-		RedisClient:                        redisClient,
-		Client:                             client,
-		NonPrimaryDocumentGeneratorFactory: v3,
-		PdfGeneratorFactory:                v4,
+		MemoryClientFactory:                v3,
+		NonPrimaryDocumentGeneratorFactory: v4,
+		PdfGeneratorFactory:                v5,
 		DocumentGeneratorFactory:           v,
-		MemoryClientFactory:                v5,
 		SliceOfPlugin:                      v2,
 	}
 	return floraContainer, func() {
@@ -121,6 +121,10 @@ func ProvideSliceOfPlugin(p0 *plugin.LoggerPlugin, p1 *plugin.MetricsPlugin) []p
 }
 
 type FloraContainer struct {
+	RedisClient *cache.RedisClient
+
+	Client cache.Client
+
 	Config config.Config
 
 	ReportService *domain.ReportService
@@ -137,17 +141,13 @@ type FloraContainer struct {
 
 	PostgresRepository *postgres.PostgresRepository
 
-	RedisClient *cache.RedisClient
-
-	Client cache.Client
+	MemoryClientFactory func() (*cache.MemoryClient, func(), error)
 
 	NonPrimaryDocumentGeneratorFactory func() (*report.NonPrimaryDocumentGenerator, func(), error)
 
 	PdfGeneratorFactory func() (*report.PdfGenerator, func(), error)
 
 	DocumentGeneratorFactory func() (report.DocumentGenerator, func(), error)
-
-	MemoryClientFactory func() (*cache.MemoryClient, func(), error)
 
 	SliceOfPlugin []plugin.Plugin
 }

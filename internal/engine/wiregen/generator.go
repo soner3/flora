@@ -466,11 +466,11 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 	defer os.Remove(tempFilePath)
 
 	log.Debug("Ensuring google/wire dependency is present...")
-	getCmd := exec.Command("go", "get", "github.com/google/wire")
+	getCmd := exec.Command("go", "get", "github.com/google/wire@latest")
 	getCmd.Dir = absOutDir
 	if err := getCmd.Run(); err != nil {
 		chainErr := fmt.Errorf("%w: %w", ErrEnsureWireDependency, err)
-		return errs.Wrap(chainErr, "failed running 'go get github.com/google/wire' in %s", absOutDir)
+		return errs.Wrap(chainErr, "failed running 'go get github.com/google/wire@latest' in %s", absOutDir)
 	}
 
 	log.Debug("Running DI engine via Google Wire...")
@@ -493,6 +493,10 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 		chainErr := fmt.Errorf("%w: %w", ErrRenameGeneratedFile, err)
 		return errs.Wrap(chainErr, "from %s to %s", generatedWireFile, finalFloraFile)
 	}
+
+	tidyCmd := exec.Command("go", "mod", "tidy")
+	tidyCmd.Dir = absOutDir
+	_ = tidyCmd.Run()
 
 	return nil
 }

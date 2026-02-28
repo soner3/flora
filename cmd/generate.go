@@ -29,20 +29,36 @@ var outputDir string
 
 // generateCmd represents the generate command
 var generateCmd = &cobra.Command{
-	Use:          "generate",
-	Aliases:      []string{"gen"},
-	Short:        "Generate flora files",
-	Long:         `Generate flora files from the given directory.`,
+	Use:     "generate",
+	Aliases: []string{"gen"},
+	Short:   "Generates the type-safe Flora DI container",
+	Long: `Scans the specified input directory for 'flora.Component' and 'flora.Configuration' tags.
+It resolves the dependency graph, validates missing or duplicate providers, 
+and uses Google Wire under the hood to generate a reflection-free, type-safe DI container.
+
+The resulting 'flora_container.go' will be placed in your specified output directory.`,
+	Example: `  # Scan current directory and generate container in the 'flora' folder (defaults)
+  flora generate
+
+  # Scan specific directory and output to the 'cmd/server' package
+  flora generate -i ./internal -o ./cmd/server
+  
+  # Using the alias
+  flora gen -i ./pkg/services`,
 	SilenceUsage: true,
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		log := slog.With("pkg", "cmd")
-
 		log.Debug("Validating flags", "input", inputDir, "output", outputDir)
-		if _, err := os.Stat(inputDir); err != nil {
-			return errs.Wrap(err, "invalid directory provided for flag 'input': %s", inputDir)
+
+		info, err := os.Stat(inputDir)
+		if err != nil {
+			return errs.Wrap(err, "invalid directory provided for flag 'input': %s (directory does not exist)", inputDir)
+		}
+		if !info.IsDir() {
+			return errs.Wrap(err, "invalid path provided for flag 'input': %s is a file, but must be a directory", inputDir)
 		}
 
-		log.Debug("Flag is valid", "flag", "input")
+		log.Debug("Flags are valid")
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {

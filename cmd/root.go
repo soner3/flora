@@ -30,21 +30,18 @@ var logLevel string
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:     "flora",
-	Version: "v1.0.0",
+	Version: "1.0.0",
 	Short:   "Compile-time Dependency Injection for Go",
-	Long: `A longer description that spans multiple lines and likely contains
-examples and usage of using your application. For example:
+	Long: `Flora is a powerful, reflection-free Dependency Injection framework for Go.
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+By analyzing your codebase for '@Component' and '@Configuration' tags, 
+Flora automatically resolves your dependency graph and uses Google Wire 
+under the hood to generate safe, readable, and highly performant 
+initialization code at compile time.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		setupLogger()
 	},
 	SilenceErrors: true,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -63,16 +60,8 @@ func Execute() {
 }
 
 func init() {
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
-
-	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.flora.yaml)")
+	rootCmd.SetVersionTemplate("{{.Name}} version {{.Version}}\n")
 	rootCmd.PersistentFlags().StringVarP(&logLevel, "log-level", "l", "info", "Log level (debug, info, warn, error)")
-
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	// rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
 
 func setupLogger() {
