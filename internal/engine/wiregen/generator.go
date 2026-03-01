@@ -463,7 +463,12 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 		return errs.Wrap(chainErr, "path: %s", tempFilePath)
 	}
 
-	defer os.Remove(tempFilePath)
+	defer func() {
+		os.Remove(tempFilePath)
+		tidyCmd := exec.Command("go", "mod", "tidy")
+		tidyCmd.Dir = absOutDir
+		_ = tidyCmd.Run()
+	}()
 
 	log.Debug("Ensuring google/wire dependency is present...")
 	getCmd := exec.Command("go", "get", "github.com/google/wire@latest")
@@ -493,10 +498,6 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 		chainErr := fmt.Errorf("%w: %w", ErrRenameGeneratedFile, err)
 		return errs.Wrap(chainErr, "from %s to %s", generatedWireFile, finalFloraFile)
 	}
-
-	tidyCmd := exec.Command("go", "mod", "tidy")
-	tidyCmd.Dir = absOutDir
-	_ = tidyCmd.Run()
 
 	return nil
 }
