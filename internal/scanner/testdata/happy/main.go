@@ -48,3 +48,23 @@ type ProtoConsumer struct{ flora.Component }
 func NewProtoConsumer(ifaceFactory func() Iface, structFactory func() *B) *ProtoConsumer {
 	return nil
 }
+
+type MyRouter interface {
+	Route()
+}
+
+type WebConfig struct {
+	flora.Configuration
+}
+
+func (c *WebConfig) ProvideRouter() MyRouter {
+	return nil
+}
+
+type Server struct {
+	flora.Component
+}
+
+func NewServer(router MyRouter) *Server {
+	return nil
+}

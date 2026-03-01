@@ -63,7 +63,7 @@ var markers = []string{
 
 type scannedComponent struct {
 	Metadata *engine.ComponentMetadata
-	PtrType  *types.Pointer
+	Type     types.Type
 }
 
 type componentInfo struct {
@@ -75,11 +75,11 @@ type componentInfo struct {
 	Tag        string
 }
 
-var log = slog.With("pkg", "scanner")
-
 // ParsePackages parses the given packages and returns a GeneratorContext
 // containing the parsed components and slice bindings
 func ParsePackages(pkgs []*packages.Package) (*engine.GeneratorContext, error) {
+	var log = slog.With("pkg", "scanner")
+
 	log.Debug("Parsing components from packages", "package_count", len(pkgs))
 
 	compInfos := parseMarkedComponents(pkgs)
@@ -265,7 +265,7 @@ func processComponent(compInfo *componentInfo, neededInterfaces, neededSlices *m
 
 	return &scannedComponent{
 		Metadata: metadata,
-		PtrType:  types.NewPointer(compInfo.TypeName.Type()),
+		Type:     types.NewPointer(compInfo.TypeName.Type()),
 	}, nil
 
 }
@@ -430,18 +430,24 @@ func isCleanupFunc(t types.Type) bool {
 
 // bindInterfacesToComponents binds the needed interfaces to the components that implement them
 func bindInterfacesToComponents(components []*scannedComponent, neededInterfaces map[string]types.Type) error {
+	var log = slog.With("pkg", "scanner")
 	for neededName, neededType := range neededInterfaces {
 		iface := neededType.Underlying().(*types.Interface)
 
 		var implementers []*scannedComponent
 
 		for _, comp := range components {
-			if types.Implements(comp.PtrType, iface) {
+			log.Debug("Checking if component implements interface", "component", comp.Metadata.StructName, "interface", neededName)
+			if types.Implements(comp.Type, iface) || types.Identical(comp.Type, neededType) {
 				implementers = append(implementers, comp)
 			}
 		}
 
 		bindToComp := func(comp *scannedComponent, ifaceType types.Type) error {
+			if types.Identical(comp.Type, ifaceType) {
+				log.Debug("Component already provides exact interface type, skipping wire.Bind", "interface", neededName)
+				return nil
+			}
 			if named, ok := ifaceType.(*types.Named); ok {
 				comp.Metadata.Implements = append(comp.Metadata.Implements, engine.InterfaceMetadata{
 					PackageName:   named.Obj().Pkg().Name(),
@@ -496,6 +502,7 @@ func bindInterfacesToComponents(components []*scannedComponent, neededInterfaces
 
 // bindSlicesToComponents binds the needed slices to the components that implement them
 func bindSlicesToComponents(components []*scannedComponent, neededSlices map[string]types.Type) ([]*engine.SliceBindingMetadata, error) {
+	var log = slog.With("pkg", "scanner")
 	var sliceBindings []*engine.SliceBindingMetadata
 
 	for neededName, neededType := range neededSlices {
@@ -503,7 +510,7 @@ func bindSlicesToComponents(components []*scannedComponent, neededSlices map[str
 		var implementers []*engine.ComponentMetadata
 
 		for _, comp := range components {
-			if types.Implements(comp.PtrType, iface) {
+			if types.Implements(comp.Type, iface) || types.Identical(comp.Type, neededType) {
 				implementers = append(implementers, comp.Metadata)
 			}
 		}
@@ -641,16 +648,10 @@ func processConfiguration(compInfo *componentInfo, neededInterfaces, neededSlice
 
 			sig := obj.(*types.Func).Type().(*types.Signature)
 			retType := sig.Results().At(0).Type()
-			var ptrType *types.Pointer
-			if ptr, isPtr := retType.(*types.Pointer); isPtr {
-				ptrType = ptr
-			} else {
-				ptrType = types.NewPointer(retType)
-			}
 
 			results = append(results, &scannedComponent{
 				Metadata: metadata,
-				PtrType:  ptrType,
+				Type:     retType,
 			})
 		}
 	}
