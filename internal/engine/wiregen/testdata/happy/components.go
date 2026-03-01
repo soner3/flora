@@ -15,7 +15,12 @@ limitations under the License.
 */
 package happy
 
-import "github.com/soner3/flora"
+import (
+	"fmt"
+	"net/http"
+
+	"github.com/soner3/flora"
+)
 
 type Greeter interface {
 	Greet() string
@@ -85,3 +90,47 @@ type PluginManager struct {
 }
 
 func NewPluginManager(plugins []Plugin) *PluginManager { return nil }
+
+// ---------------------------------------------------------
+// 1. The Interface
+// ---------------------------------------------------------
+type Middleware interface {
+	Handle(next http.Handler) http.Handler
+}
+
+// ---------------------------------------------------------
+// 2. Functional Adapter
+// Prevents boilerplate! We only write this once.
+// ---------------------------------------------------------
+type MiddlewareFunc func(http.Handler) http.Handler
+
+func (f MiddlewareFunc) Handle(next http.Handler) http.Handler {
+	return f(next)
+}
+
+// ---------------------------------------------------------
+// 3. The Configuration
+// ---------------------------------------------------------
+type MiddlewareConfig struct {
+	flora.Configuration
+}
+
+// flora:order=1
+func (c *MiddlewareConfig) ProvideLogger() Middleware {
+	return MiddlewareFunc(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			fmt.Printf("-> [Logger] Intercepted %s %s\n", r.Method, r.URL.Path)
+			next.ServeHTTP(w, r)
+		})
+	})
+}
+
+// flora:order=2
+func (c *MiddlewareConfig) ProvideAuth() Middleware {
+	return MiddlewareFunc(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+			next.ServeHTTP(w, r)
+		})
+	})
+}

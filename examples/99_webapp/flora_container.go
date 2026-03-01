@@ -29,10 +29,10 @@ func InitializeContainer() (*FloraContainer, func(), error) {
 	bookService := service.NewBookService(bookRepository)
 	bookHandler := controller.NewBookHandler(bookService)
 	helloHandler := controller.NewHelloHandler()
-	loggerMw := Provide_MiddlewareConfig_ProvideLogger()
-	authMw := Provide_MiddlewareConfig_ProvideAuth(bookRepository)
+	floraAlias_Provide_MiddlewareConfig_ProvideLogger := Provide_MiddlewareConfig_ProvideLogger()
+	floraAlias_Provide_MiddlewareConfig_ProvideAuth := Provide_MiddlewareConfig_ProvideAuth(bookRepository)
 	v := ProvideSliceOfController(bookHandler, helloHandler)
-	v2 := ProvideSliceOfMiddleware(loggerMw, authMw)
+	v2 := ProvideSliceOfMiddleware(floraAlias_Provide_MiddlewareConfig_ProvideLogger, floraAlias_Provide_MiddlewareConfig_ProvideAuth)
 	handler := Provide_WebConfig_ProvideRouter(v, v2)
 	server, cleanup2, err := Provide_WebConfig_ProvideServer(appConfig, handler)
 	if err != nil {
@@ -40,18 +40,18 @@ func InitializeContainer() (*FloraContainer, func(), error) {
 		return nil, nil, err
 	}
 	floraContainer := &FloraContainer{
-		AppConfig:         appConfig,
-		BookRepository:    bookRepository,
-		BookService:       bookService,
-		BookHandler:       bookHandler,
-		HelloHandler:      helloHandler,
-		LoggerMw:          loggerMw,
-		AuthMw:            authMw,
-		Handler:           handler,
-		Server:            server,
-		DB:                db,
-		SliceOfController: v,
-		SliceOfMiddleware: v2,
+		AppConfig:                              appConfig,
+		BookRepository:                         bookRepository,
+		BookService:                            bookService,
+		BookHandler:                            bookHandler,
+		HelloHandler:                           helloHandler,
+		DB:                                     db,
+		Provide_MiddlewareConfig_ProvideLogger: floraAlias_Provide_MiddlewareConfig_ProvideLogger,
+		Provide_MiddlewareConfig_ProvideAuth:   floraAlias_Provide_MiddlewareConfig_ProvideAuth,
+		Handler:                                handler,
+		Server:                                 server,
+		SliceOfController:                      v,
+		SliceOfMiddleware:                      v2,
 	}
 	return floraContainer, func() {
 		cleanup2()
@@ -61,29 +61,48 @@ func InitializeContainer() (*FloraContainer, func(), error) {
 
 // flora_injector.go:
 
-func Provide_MiddlewareConfig_ProvideLogger() *middleware.LoggerMw {
-	cfg := middleware.MiddlewareConfig{}
-	return cfg.ProvideLogger()
+func Provide_DBConfig_ProvideDatabase(p0 *config.AppConfig) (*sql.DB, func(), error) {
+	cfg := infrastructure.DBConfig{}
+
+	val, cleanup, err := cfg.ProvideDatabase(p0)
+	return val, cleanup, err
+
 }
 
-func Provide_MiddlewareConfig_ProvideAuth(p0 *repository.BookRepository) *middleware.AuthMw {
+type FloraAlias_Provide_MiddlewareConfig_ProvideLogger middleware.Middleware
+
+func Provide_MiddlewareConfig_ProvideLogger() FloraAlias_Provide_MiddlewareConfig_ProvideLogger {
 	cfg := middleware.MiddlewareConfig{}
-	return cfg.ProvideAuth(p0)
+
+	val := cfg.ProvideLogger()
+	return FloraAlias_Provide_MiddlewareConfig_ProvideLogger(val)
+
+}
+
+type FloraAlias_Provide_MiddlewareConfig_ProvideAuth middleware.Middleware
+
+func Provide_MiddlewareConfig_ProvideAuth(p0 *repository.BookRepository) FloraAlias_Provide_MiddlewareConfig_ProvideAuth {
+	cfg := middleware.MiddlewareConfig{}
+
+	val := cfg.ProvideAuth(p0)
+	return FloraAlias_Provide_MiddlewareConfig_ProvideAuth(val)
+
 }
 
 func Provide_WebConfig_ProvideRouter(p0 []controller.Controller, p1 []middleware.Middleware) http.Handler {
 	cfg := WebConfig{}
-	return cfg.ProvideRouter(p0, p1)
+
+	val := cfg.ProvideRouter(p0, p1)
+	return val
+
 }
 
 func Provide_WebConfig_ProvideServer(p0 *config.AppConfig, p1 http.Handler) (*http.Server, func(), error) {
 	cfg := WebConfig{}
-	return cfg.ProvideServer(p0, p1)
-}
 
-func Provide_DBConfig_ProvideDatabase(p0 *config.AppConfig) (*sql.DB, func(), error) {
-	cfg := infrastructure.DBConfig{}
-	return cfg.ProvideDatabase(p0)
+	val, cleanup, err := cfg.ProvideServer(p0, p1)
+	return val, cleanup, err
+
 }
 
 func ProvideSliceOfController(p0 *controller.BookHandler, p1 *controller.HelloHandler) []controller.Controller {
@@ -92,10 +111,8 @@ func ProvideSliceOfController(p0 *controller.BookHandler, p1 *controller.HelloHa
 	}
 }
 
-func ProvideSliceOfMiddleware(p0 *middleware.LoggerMw, p1 *middleware.AuthMw) []middleware.Middleware {
-	return []middleware.Middleware{
-		p0, p1,
-	}
+func ProvideSliceOfMiddleware(p0 FloraAlias_Provide_MiddlewareConfig_ProvideLogger, p1 FloraAlias_Provide_MiddlewareConfig_ProvideAuth) []middleware.Middleware {
+	return []middleware.Middleware{middleware.Middleware(p0), middleware.Middleware(p1)}
 }
 
 type FloraContainer struct {
@@ -109,15 +126,15 @@ type FloraContainer struct {
 
 	HelloHandler *controller.HelloHandler
 
-	LoggerMw *middleware.LoggerMw
+	DB *sql.DB
 
-	AuthMw *middleware.AuthMw
+	Provide_MiddlewareConfig_ProvideLogger FloraAlias_Provide_MiddlewareConfig_ProvideLogger
+
+	Provide_MiddlewareConfig_ProvideAuth FloraAlias_Provide_MiddlewareConfig_ProvideAuth
 
 	Handler http.Handler
 
 	Server *http.Server
-
-	DB *sql.DB
 
 	SliceOfController []controller.Controller
 

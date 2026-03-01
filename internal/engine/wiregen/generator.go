@@ -84,11 +84,30 @@ func {{.WrapperName}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{
     }
 }
 {{else}}
-func {{.WrapperName}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.Name}} {{$param.Type}}{{end}}) ({{.ReturnType}}{{if .HasCleanup}}, func(){{end}}{{if .HasError}}, error{{end}}) {
+{{if .NeedsAlias}}type {{.AliasName}} {{.ReturnType}}{{end}}
+func {{.WrapperName}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.Name}} {{$param.Type}}{{end}}) ({{if .NeedsAlias}}{{.AliasName}}{{else}}{{.ReturnType}}{{end}}{{if .HasCleanup}}, func(){{end}}{{if .HasError}}, error{{end}}) {
     cfg := {{.ConfigPackagePrefix}}{{.ConfigStructName}}{}
-    return cfg.{{.ConfigMethodName}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.Name}}{{end}})
+    {{if and .HasCleanup .HasError}}
+    val, cleanup, err := cfg.{{.ConfigMethodName}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.Name}}{{end}})
+    return {{if .NeedsAlias}}{{.AliasName}}(val){{else}}val{{end}}, cleanup, err
+    {{else if .HasCleanup}}
+    val, cleanup := cfg.{{.ConfigMethodName}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.Name}}{{end}})
+    return {{if .NeedsAlias}}{{.AliasName}}(val){{else}}val{{end}}, cleanup
+    {{else if .HasError}}
+    val, err := cfg.{{.ConfigMethodName}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.Name}}{{end}})
+    return {{if .NeedsAlias}}{{.AliasName}}(val){{else}}val{{end}}, err
+    {{else}}
+    val := cfg.{{.ConfigMethodName}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.Name}}{{end}})
+    return {{if .NeedsAlias}}{{.AliasName}}(val){{else}}val{{end}}
+    {{end}}
 }
 {{end}}
+{{end}}
+
+{{range .PrimaryAliases}}
+func ProvidePrimary_{{.AliasName}}(val {{.AliasName}}) {{.ReturnType}} {
+    return {{.ReturnType}}(val)
+}
 {{end}}
 
 {{range .Prototypes}}
@@ -102,16 +121,18 @@ func {{.WrapperName}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{
 {{end}}
 
 {{range .SliceBindings}}
-func ProvideSliceOf{{.InterfaceName}}({{range .Implementations}}{{.ParamName}} {{.TypePrefix}}{{.StructName}}, {{end}}) []{{.InterfacePrefix}}{{.InterfaceName}} {
+{{$prefix := .InterfacePrefix}}
+{{$name := .InterfaceName}}
+func ProvideSliceOf{{.InterfaceName}}({{range .Implementations}}{{.ParamName}} {{.ParamType}}, {{end}}) []{{.InterfacePrefix}}{{.InterfaceName}} {
     return []{{.InterfacePrefix}}{{.InterfaceName}}{
-        {{range .Implementations}}{{.ParamName}},{{end}}
+        {{range .Implementations}}{{if .NeedsAlias}}{{$prefix}}{{$name}}({{.ParamName}}){{else}}{{.ParamName}}{{end}},{{end}}
     }
 }
 {{end}}
 
 type FloraContainer struct {
     {{range .Providers}}
-    {{.StructName}} {{if .IsPointer}}*{{end}}{{.TypePrefix}}{{.StructName}}
+    {{.FieldName}} {{.FieldType}}
     {{end}}
     
     {{range .Prototypes}}
@@ -127,6 +148,9 @@ func InitializeContainer() (*FloraContainer, func(), error) {
     wire.Build(
         {{range .Providers}}
         {{.CallPrefix}}{{.ConstructorName}},
+        {{end}}
+        {{range .PrimaryAliases}}
+        ProvidePrimary_{{.AliasName}},
         {{end}}
         {{range .Prototypes}}
         {{.WrapperName}},
@@ -144,11 +168,10 @@ func InitializeContainer() (*FloraContainer, func(), error) {
 `
 
 type providerData struct {
-	StructName      string
+	FieldName       string
+	FieldType       string
 	CallPrefix      string
-	TypePrefix      string
 	ConstructorName string
-	IsPointer       bool
 }
 
 type paramData struct {
@@ -177,6 +200,8 @@ type configWrapperData struct {
 	HasCleanup          bool
 	HasError            bool
 	IsPrototype         bool
+	NeedsAlias          bool
+	AliasName           string
 }
 
 type bindingData struct {
@@ -189,14 +214,19 @@ type bindingData struct {
 
 type sliceImplData struct {
 	ParamName  string
-	TypePrefix string
-	StructName string
+	ParamType  string
+	NeedsAlias bool
 }
 
 type sliceBindingData struct {
 	InterfacePrefix string
 	InterfaceName   string
 	Implementations []sliceImplData
+}
+
+type primaryAliasData struct {
+	AliasName  string
+	ReturnType string
 }
 
 type templateData struct {
@@ -207,6 +237,7 @@ type templateData struct {
 	ConfigWrappers []configWrapperData
 	Bindings       []bindingData
 	SliceBindings  []sliceBindingData
+	PrimaryAliases []primaryAliasData
 }
 
 func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext) error {
@@ -249,10 +280,25 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 		PackageName: pkgName,
 	}
 
+	typeCount := make(map[string]int)
+	for _, comp := range genCtx.Components {
+		isBuiltIn := isBuiltInType(comp.StructName)
+		compPrefix := ""
+		if comp.PackageName != pkgName && !isBuiltIn {
+			compPrefix = comp.PackageName + "."
+		}
+		retType := compPrefix + comp.StructName
+		if comp.IsPointer {
+			retType = "*" + retType
+		}
+		typeCount[retType]++
+	}
+
 	var providers []providerData
 	var prototypes []prototypeData
 	var configWrappers []configWrapperData
 	var bindings []bindingData
+	var primaryAliases []primaryAliasData
 	importSet := make(map[string]bool)
 
 	for _, comp := range genCtx.Components {
@@ -298,6 +344,12 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 			retType = "*" + retType
 		}
 
+		needsAlias := isConfig && comp.Scope != "prototype" && typeCount[retType] > 1
+		aliasName := ""
+		if needsAlias {
+			aliasName = "FloraAlias_" + comp.ConstructorName
+		}
+
 		if comp.Scope == "prototype" {
 			wrapperName := "ProvidePrototype" + comp.StructName
 			if isConfig {
@@ -312,6 +364,7 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 					HasCleanup:          comp.HasCleanup,
 					HasError:            comp.HasError,
 					IsPrototype:         true,
+					NeedsAlias:          false,
 				})
 			}
 
@@ -364,15 +417,33 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 					HasCleanup:          comp.HasCleanup,
 					HasError:            comp.HasError,
 					IsPrototype:         false,
+					NeedsAlias:          needsAlias,
+					AliasName:           aliasName,
 				})
+
+				if needsAlias && comp.IsPrimary {
+					primaryAliases = append(primaryAliases, primaryAliasData{
+						AliasName:  aliasName,
+						ReturnType: retType,
+					})
+				}
+			}
+
+			fieldName := comp.StructName
+			if typeCount[retType] > 1 {
+				fieldName = comp.ConstructorName
+			}
+
+			fieldType := retType
+			if needsAlias {
+				fieldType = aliasName
 			}
 
 			providers = append(providers, providerData{
-				StructName:      comp.StructName,
+				FieldName:       fieldName,
+				FieldType:       fieldType,
 				CallPrefix:      callPrefix,
-				TypePrefix:      compPrefix,
 				ConstructorName: wrapperName,
-				IsPointer:       comp.IsPointer,
 			})
 
 			for _, iface := range comp.Implements {
@@ -409,18 +480,26 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 
 		var impls []sliceImplData
 		for i, impl := range sb.Implementations {
-			typePrefix := ""
-			if impl.IsPointer {
-				typePrefix = "*"
-			}
-			if impl.PackageName != pkgName && impl.PackageName != "main" {
-				typePrefix += impl.PackageName + "."
+			implPrefix := ""
+			if impl.PackageName != pkgName && impl.PackageName != "main" && !isBuiltInType(impl.StructName) {
+				implPrefix = impl.PackageName + "."
 				importSet[impl.PackagePath] = true
 			}
+			implRetType := implPrefix + impl.StructName
+			if impl.IsPointer {
+				implRetType = "*" + implRetType
+			}
+
+			implNeedsAlias := impl.ConfigStructName != "" && impl.Scope != "prototype" && typeCount[implRetType] > 1
+			paramType := implRetType
+			if implNeedsAlias {
+				paramType = "FloraAlias_" + impl.ConstructorName
+			}
+
 			impls = append(impls, sliceImplData{
 				ParamName:  fmt.Sprintf("p%d", i),
-				TypePrefix: typePrefix,
-				StructName: impl.StructName,
+				ParamType:  paramType,
+				NeedsAlias: implNeedsAlias,
 			})
 		}
 
@@ -436,6 +515,7 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 	data.ConfigWrappers = configWrappers
 	data.Bindings = bindings
 	data.SliceBindings = sliceBindingsData
+	data.PrimaryAliases = primaryAliases
 
 	for imp := range importSet {
 		if generatedPkgPath != "" && imp == generatedPkgPath {

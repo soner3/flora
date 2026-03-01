@@ -396,6 +396,58 @@ func TestGenerate(t *testing.T) {
 			},
 			expErr: ErrMainComponentLeak,
 		},
+		{
+			name: "TestConfigTypeAliasing",
+			setupDir: func(t *testing.T) string {
+				tmpDir, err := os.MkdirTemp(".", "flora_test_out_*")
+				if err != nil {
+					t.Fatal(err)
+				}
+				dummyFile := filepath.Join(tmpDir, "dummy.go")
+				os.WriteFile(dummyFile, []byte("package custompkg\n"), 0644)
+				return tmpDir
+			},
+			genCtx: &engine.GeneratorContext{
+				Components: []*engine.ComponentMetadata{
+					{
+						PackageName:       "pkg",
+						PackagePath:       "github.com/test/pkg",
+						StructName:        "MyInterface",
+						ConfigStructName:  "Config",
+						ConfigPackageName: "pkg",
+						ConstructorName:   "ProvideA",
+						IsPrimary:         true,
+					},
+					{
+						PackageName:       "pkg",
+						PackagePath:       "github.com/test/pkg",
+						StructName:        "MyInterface",
+						ConfigStructName:  "Config",
+						ConfigPackageName: "pkg",
+						ConstructorName:   "ProvideB",
+					},
+				},
+				SliceBindings: []*engine.SliceBindingMetadata{
+					{
+						Interface: engine.InterfaceMetadata{
+							PackageName:   "pkg",
+							PackagePath:   "github.com/test/pkg",
+							InterfaceName: "MyInterface",
+						},
+						Implementations: []*engine.ComponentMetadata{
+							{
+								PackageName:      "pkg",
+								PackagePath:      "github.com/test/pkg",
+								StructName:       "MyInterface",
+								ConfigStructName: "Config",
+								ConstructorName:  "ProvideA",
+							},
+						},
+					},
+				},
+			},
+			expErr: ErrWireExecution,
+		},
 	}
 
 	for _, tc := range testcases {
