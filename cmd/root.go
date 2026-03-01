@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -27,10 +28,15 @@ import (
 
 var logLevel string
 
+var (
+	Version = "0.1.0"
+	Build   = "unknown"
+)
+
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:     "flora",
-	Version: "1.0.0",
+	Version: fmt.Sprintf("%s, build %s", Version, Build),
 	Short:   "Compile-time Dependency Injection for Go",
 	Long: `Flora is a powerful, reflection-free Dependency Injection framework for Go.
 
@@ -60,7 +66,7 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.SetVersionTemplate("{{.Name}} version {{.Version}}\n")
+	rootCmd.SetVersionTemplate("Flora version {{.Version}}\n")
 	rootCmd.PersistentFlags().StringVarP(&logLevel, "log-level", "l", "info", "Log level (debug, info, warn, error)")
 }
 
