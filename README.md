@@ -124,6 +124,10 @@ type DatabaseConfig struct {
 // flora:primary
 func (c *DatabaseConfig) ProvidePostgres() (*sql.DB, func(), error) {
     db, err := sql.Open("postgres", "...")
+
+    if err != nil {
+      return nil, nil, err
+    }
     
     // Flora handles the cleanup function automatically during graceful shutdown!
     cleanup := func() { db.Close() }
