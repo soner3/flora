@@ -1,12 +1,12 @@
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/fc403eb3-7b4c-45e6-b57a-10502865f98e" alt="Flora DI Framework Banner" width="65%" />
+  <img src="https://github.com/user-attachments/assets/70725b89-beef-4ad2-a8c3-211411a4b0c6" alt="Flora DI Framework Banner" width="65%" />
 
   <br />
   <br />
 
   <h1>Flora</h1>
-  <p><b>Compile-time, reflection-free Dependency Injection for Go.</b><br/>
-  <i>Spring-like developer experience, but with zero runtime overhead and absolute type safety.</i></p>
+  <p><b>Compile-time Dependency Injection for Go.</b><br/>
+  <i>Spring-like convenience, zero runtime overhead, and absolutely no magic.</i></p>
 
   <p>
     <a href="https://pkg.go.dev/github.com/soner3/flora"><img src="https://pkg.go.dev/badge/github.com/soner3/flora.svg" alt="Go Reference"></a>
@@ -23,12 +23,19 @@
 
 ## Why Flora?
 
-Flora acts as a "Convention over Configuration" layer for Go. It parses your source code's Abstract Syntax Tree (AST) to discover components natively and generates a strongly-typed DI container using [Google Wire](https://github.com/google/wire) under the hood.
+Dependency Injection in Go traditionally forces developers to choose between two painful extremes:
 
-* **Zero Runtime Overhead:** The generated code is exactly as fast as manually written Go code.
+1. **Manual Wiring (Boilerplate):** You manually construct the dependency graph or maintain massive `ProviderSets` (e.g., in Google Wire). As your application scales to dozens of services, wiring becomes a tedious, unmaintainable chore.
+2. **Reflection (Runtime Magic):** You use dynamic frameworks that resolve dependencies at runtime. This causes slower startup times, circumvents Go's strict compiler, and worst of all: missing dependencies cause your application to panic *at runtime* instead of failing during compilation.
+
+Flora solves this by acting as a "Convention over Configuration" layer. It parses your source code's Abstract Syntax Tree (AST) to natively discover your components, and then automatically generates a strongly-typed DI container using [Google Wire](https://github.com/google/wire) under the hood.
+
+You get the developer experience of a modern, automated framework with the safety and performance of purely static code.
+
+* **Zero Runtime Overhead:** The generated container is exactly as fast and memory-efficient as manually written Go code.
 * **No Reflection:** Everything is evaluated at compile-time. If your code compiles, your dependency graph is 100% safe.
-* **Auto-Discovery:** Just embed a marker interface. Flora reads the constructors and wires them automatically.
-* **Native Go Idioms:** Full support for `error` returns and `cleanup func()` routines in your constructors.
+* **Auto-Discovery:** Just embed a marker into your structs. Flora reads your constructors and wires the entire graph automatically.
+* **Native Go Idioms:** Full, automatic support for constructors returning initialization `error`s and `cleanup func()` routines for graceful shutdowns.
 
 ---
 
