@@ -38,10 +38,10 @@ Flora consists of a CLI tool (to generate the container) and a core library (for
 
 ```bash
 # 1. Install the CLI tool globally
-go install [github.com/soner3/flora/cmd/flora@latest](https://github.com/soner3/flora/cmd/flora@latest)
+go install github.com/soner3/flora/cmd/flora@latest
 
 # 2. Add the library to your project
-go get [github.com/soner3/flora@latest](https://github.com/soner3/flora@latest)
+go get github.com/soner3/flora@latest
 
 ```
 
@@ -54,7 +54,7 @@ Instead of maintaining huge initialization scripts, you define dependencies decl
 ```go
 package main
 
-import "[github.com/soner3/flora](https://github.com/soner3/flora)"
+import "github.com/soner3/flora"
 
 // 1. Mark your struct as a component
 type Greeter struct {
@@ -114,7 +114,7 @@ package config
 
 import (
     "database/sql"
-    "[github.com/soner3/flora](https://github.com/soner3/flora)"
+    "github.com/soner3/flora"
 )
 
 type DatabaseConfig struct {
