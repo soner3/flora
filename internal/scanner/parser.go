@@ -170,8 +170,15 @@ func parseMarkedComponents(pkgs []*packages.Package) *[]componentInfo {
 func isMarkedWith(structType *types.Struct) (bool, string, string) {
 	for i := 0; i < structType.NumFields(); i++ {
 		field := structType.Field(i)
+		if !field.Anonymous() {
+			continue
+		}
+
+		fieldType := types.Unalias(field.Type())
+		typeStr := fieldType.String()
+
 		for _, marker := range markers {
-			if field.Anonymous() && field.Type().String() == marker {
+			if typeStr == marker {
 				return true, marker, structType.Tag(i)
 			}
 		}

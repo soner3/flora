@@ -23,9 +23,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/soner3/flora"
-	"github.com/soner3/flora/examples/99_full_tutorial/config"
-	"github.com/soner3/flora/examples/99_full_tutorial/controller"
-	"github.com/soner3/flora/examples/99_full_tutorial/middleware"
+	"github.com/soner3/flora/examples/99_webapp/config"
+	"github.com/soner3/flora/examples/99_webapp/controller"
+	"github.com/soner3/flora/examples/99_webapp/middleware"
 )
 
 // WebConfig utilizes flora.Configuration to provide third-party types

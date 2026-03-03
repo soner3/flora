@@ -20,7 +20,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/soner3/flora"
-	"github.com/soner3/flora/examples/99_full_tutorial/service"
+	"github.com/soner3/flora/examples/99_webapp/service"
 )
 
 type BookHandler struct {

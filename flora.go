@@ -28,6 +28,11 @@ package flora
 //		flora.Component `flora:"primary,scope=prototype,constructor=BuildService,order=1"`
 //	}
 //
+// Clean Architecture & Type Aliasing:
+// To prevent framework pollution in your core domain, Flora fully supports Go Type Aliases.
+// You can define a neutral alias (e.g., `type DIComponent = flora.Component`) in your domain
+// and embed that alias instead. Flora's AST scanner will automatically resolve it.
+//
 // Available Tag Options:
 //   - constructor=<Name>: Overrides the default constructor lookup (e.g., constructor=BuildMyService).
 //   - primary: Marks this component as the primary implementation of an interface to resolve collisions.
@@ -51,6 +56,10 @@ type Component struct{}
 //
 //	// flora:primary,scope=prototype
 //	func (c *DatabaseConfig) ProvideDatabase() *sql.DB { ... }
+//
+// Clean Architecture & Type Aliasing:
+// Just like flora.Component, you can use a Go Type Alias (e.g., `type DIConfig = flora.Configuration`)
+// to keep your architecture strictly decoupled from the framework.
 //
 // Available Magic Comments:
 //   - // flora:primary : Marks the returned type as the primary implementation to resolve collisions.

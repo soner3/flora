@@ -33,6 +33,8 @@ var (
 	Build   = "unknown"
 )
 
+var osExit = os.Exit
+
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:     "flora",
@@ -45,7 +47,7 @@ Flora automatically resolves your dependency graph and uses Google Wire
 under the hood to generate safe, readable, and highly performant 
 initialization code at compile time.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		setupLogger()
+		setupLogger(cmd)
 	},
 	SilenceErrors: true,
 }
@@ -61,7 +63,7 @@ func Execute() {
 			slog.Error(err.Error())
 		}
 
-		os.Exit(1)
+		osExit(1)
 	}
 }
 
@@ -70,9 +72,9 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&logLevel, "log-level", "l", "info", "Log level (debug, info, warn, error)")
 }
 
-func setupLogger() {
+func setupLogger(cmd *cobra.Command) {
 	var level slog.Level
-	var writer io.Writer = os.Stdout
+	var writer io.Writer = cmd.OutOrStdout()
 	invalidLevel := false
 
 	switch strings.ToLower(logLevel) {
@@ -84,7 +86,7 @@ func setupLogger() {
 		level = slog.LevelWarn
 	case "error":
 		level = slog.LevelError
-		writer = os.Stderr
+		writer = cmd.ErrOrStderr()
 	default:
 		invalidLevel = true
 		level = slog.LevelInfo

@@ -19,7 +19,7 @@ import (
 	"net/http"
 
 	"github.com/soner3/flora"
-	"github.com/soner3/flora/examples/99_full_tutorial/repository"
+	"github.com/soner3/flora/examples/99_webapp/repository"
 )
 
 // ---------------------------------------------------------

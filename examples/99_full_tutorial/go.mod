@@ -1,4 +1,4 @@
-module github.com/soner3/flora/examples/99_full_tutorial
+module github.com/soner3/flora/examples/99_webapp
 
 go 1.25.0
 

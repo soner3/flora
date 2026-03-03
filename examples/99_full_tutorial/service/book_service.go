@@ -18,7 +18,7 @@ import (
 	"fmt"
 
 	"github.com/soner3/flora"
-	"github.com/soner3/flora/examples/99_full_tutorial/repository"
+	"github.com/soner3/flora/examples/99_webapp/repository"
 )
 
 // ---------------------------------------------------------
@@ -32,17 +32,28 @@ type BookRepository interface {
 }
 
 // ---------------------------------------------------------
-// 2. The Service Struct
+// 2. Clean Architecture: Type Aliasing
+// ---------------------------------------------------------
+// In Hexagonal or Clean Architecture, your core domain (like this service)
+// should not have hard dependencies on external frameworks ("Framework Pollution").
+// To keep your domain structs clean, Flora fully supports Go Type Aliases.
+// You can define this alias once in a shared domain package and use it everywhere.
+type DIComponent = flora.Component
+
+// ---------------------------------------------------------
+// 3. The Service Struct
 // ---------------------------------------------------------
 type BookService struct {
-	flora.Component
+	// We embed the neutral alias instead of the framework type directly!
+	// Flora resolves this back to flora.Component during the AST scan.
+	DIComponent
 
 	// We now store the interface, not the pointer to the concrete struct!
 	repo BookRepository
 }
 
 // NewBookService constructor.
-// Flora scans the project, finds 'repository.BookRepository' (the struct),
+// Flora scans the project, finds the concrete 'repository.BookRepository',
 // sees that it implements the 'BookRepository' interface, and
 // injects it here automatically.
 func NewBookService(repo BookRepository) *BookService {

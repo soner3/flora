@@ -240,6 +240,12 @@ type templateData struct {
 	PrimaryAliases []primaryAliasData
 }
 
+const (
+	ContainerFileName = "flora_container.go"
+	WireFileName      = "wire_gen.go"
+	InjectorFileName  = "flora_injector.go"
+)
+
 func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext) error {
 	log := slog.With("pkg", "wiregen")
 
@@ -530,7 +536,7 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 		return errs.Wrap(chainErr, "template parsing failed")
 	}
 
-	tempFilePath := filepath.Join(absOutDir, "flora_injector.go")
+	tempFilePath := filepath.Join(absOutDir, InjectorFileName)
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
 		chainErr := fmt.Errorf("%w: %w", ErrExecuteTemplate, err)
@@ -570,8 +576,8 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 		return errs.Wrap(chainErr, "stderr:\n%s", stderr.String())
 	}
 
-	generatedWireFile := filepath.Join(absOutDir, "wire_gen.go")
-	finalFloraFile := filepath.Join(absOutDir, "flora_container.go")
+	generatedWireFile := filepath.Join(absOutDir, WireFileName)
+	finalFloraFile := filepath.Join(absOutDir, ContainerFileName)
 
 	log.Debug("Renaming generated file", "from", generatedWireFile, "to", finalFloraFile)
 	if err := os.Rename(generatedWireFile, finalFloraFile); err != nil {

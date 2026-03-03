@@ -19,7 +19,7 @@ import (
 	"fmt"
 
 	"github.com/soner3/flora"
-	"github.com/soner3/flora/examples/99_full_tutorial/config"
+	"github.com/soner3/flora/examples/99_webapp/config"
 
 	_ "modernc.org/sqlite"
 )

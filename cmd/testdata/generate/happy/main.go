@@ -26,14 +26,14 @@ type A struct {
 func NewA() *A { return nil }
 
 type B struct {
-	flora.Component `flora:"primary,scope=prototype,constructor=BuildB,order=1"`
+	flora.Component `flora:"scope=prototype,constructor=BuildB,order=1"`
 }
 
 func BuildB() *B { return nil }
 func (b *B) Do() {}
 
 type C struct {
-	flora.Component `flora:"NewC"`
+	flora.Component `flora:"primary,constructor=NewC"`
 }
 
 func NewC() *C   { return nil }
@@ -42,12 +42,6 @@ func (c *C) Do() {}
 type Consumer struct{ flora.Component }
 
 func NewConsumer(i Iface) *Consumer { return nil }
-
-type ProtoConsumer struct{ flora.Component }
-
-func NewProtoConsumer(ifaceFactory func() Iface, structFactory func() *B) *ProtoConsumer {
-	return nil
-}
 
 type MyRouter interface {
 	Route()

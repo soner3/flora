@@ -8,12 +8,12 @@ package main
 
 import (
 	"database/sql"
-	"github.com/soner3/flora/examples/99_full_tutorial/config"
-	"github.com/soner3/flora/examples/99_full_tutorial/controller"
-	"github.com/soner3/flora/examples/99_full_tutorial/infrastructure"
-	"github.com/soner3/flora/examples/99_full_tutorial/middleware"
-	"github.com/soner3/flora/examples/99_full_tutorial/repository"
-	"github.com/soner3/flora/examples/99_full_tutorial/service"
+	"github.com/soner3/flora/examples/99_webapp/config"
+	"github.com/soner3/flora/examples/99_webapp/controller"
+	"github.com/soner3/flora/examples/99_webapp/infrastructure"
+	"github.com/soner3/flora/examples/99_webapp/middleware"
+	"github.com/soner3/flora/examples/99_webapp/repository"
+	"github.com/soner3/flora/examples/99_webapp/service"
 	"net/http"
 )
 
@@ -50,8 +50,8 @@ func InitializeContainer() (*FloraContainer, func(), error) {
 		Provide_MiddlewareConfig_ProvideAuth:   floraAlias_Provide_MiddlewareConfig_ProvideAuth,
 		Handler:                                handler,
 		Server:                                 server,
-		SliceOfMiddleware:                      v2,
 		SliceOfController:                      v,
+		SliceOfMiddleware:                      v2,
 	}
 	return floraContainer, func() {
 		cleanup2()
@@ -105,14 +105,14 @@ func Provide_WebConfig_ProvideServer(p0 *config.AppConfig, p1 http.Handler) (*ht
 
 }
 
-func ProvideSliceOfMiddleware(p0 FloraAlias_Provide_MiddlewareConfig_ProvideLogger, p1 FloraAlias_Provide_MiddlewareConfig_ProvideAuth) []middleware.Middleware {
-	return []middleware.Middleware{middleware.Middleware(p0), middleware.Middleware(p1)}
-}
-
 func ProvideSliceOfController(p0 *controller.BookHandler, p1 *controller.HelloHandler) []controller.Controller {
 	return []controller.Controller{
 		p0, p1,
 	}
+}
+
+func ProvideSliceOfMiddleware(p0 FloraAlias_Provide_MiddlewareConfig_ProvideLogger, p1 FloraAlias_Provide_MiddlewareConfig_ProvideAuth) []middleware.Middleware {
+	return []middleware.Middleware{middleware.Middleware(p0), middleware.Middleware(p1)}
 }
 
 type FloraContainer struct {
@@ -136,7 +136,7 @@ type FloraContainer struct {
 
 	Server *http.Server
 
-	SliceOfMiddleware []middleware.Middleware
-
 	SliceOfController []controller.Controller
+
+	SliceOfMiddleware []middleware.Middleware
 }
