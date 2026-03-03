@@ -26,7 +26,7 @@ func InitializeContainer() (*FloraContainer, func(), error) {
 		return nil, nil, err
 	}
 	bookRepository := repository.NewBookRepository(db)
-	bookService := service.NewBookService(bookRepository)
+	bookService := service.ProvideBookService(bookRepository)
 	bookHandler := controller.NewBookHandler(bookService)
 	helloHandler := controller.NewHelloHandler()
 	floraAlias_Provide_MiddlewareConfig_ProvideLogger := Provide_MiddlewareConfig_ProvideLogger()

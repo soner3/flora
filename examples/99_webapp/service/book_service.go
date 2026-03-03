@@ -46,7 +46,7 @@ type DIComponent = flora.Component
 type BookService struct {
 	// We embed the neutral alias instead of the framework type directly!
 	// Flora resolves this back to flora.Component during the AST scan.
-	DIComponent
+	DIComponent `flora:"constructor=ProvideBookService"`
 
 	// We now store the interface, not the pointer to the concrete struct!
 	repo BookRepository
@@ -56,7 +56,7 @@ type BookService struct {
 // Flora scans the project, finds the concrete 'repository.BookRepository',
 // sees that it implements the 'BookRepository' interface, and
 // injects it here automatically.
-func NewBookService(repo BookRepository) *BookService {
+func ProvideBookService(repo BookRepository) *BookService {
 	fmt.Println("-> [Service] BookService initialized with Repository Interface")
 	return &BookService{
 		repo: repo,
