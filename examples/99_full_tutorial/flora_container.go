@@ -50,8 +50,8 @@ func InitializeContainer() (*FloraContainer, func(), error) {
 		Provide_MiddlewareConfig_ProvideAuth:   floraAlias_Provide_MiddlewareConfig_ProvideAuth,
 		Handler:                                handler,
 		Server:                                 server,
-		SliceOfController:                      v,
 		SliceOfMiddleware:                      v2,
+		SliceOfController:                      v,
 	}
 	return floraContainer, func() {
 		cleanup2()
@@ -105,14 +105,14 @@ func Provide_WebConfig_ProvideServer(p0 *config.AppConfig, p1 http.Handler) (*ht
 
 }
 
+func ProvideSliceOfMiddleware(p0 FloraAlias_Provide_MiddlewareConfig_ProvideLogger, p1 FloraAlias_Provide_MiddlewareConfig_ProvideAuth) []middleware.Middleware {
+	return []middleware.Middleware{middleware.Middleware(p0), middleware.Middleware(p1)}
+}
+
 func ProvideSliceOfController(p0 *controller.BookHandler, p1 *controller.HelloHandler) []controller.Controller {
 	return []controller.Controller{
 		p0, p1,
 	}
-}
-
-func ProvideSliceOfMiddleware(p0 FloraAlias_Provide_MiddlewareConfig_ProvideLogger, p1 FloraAlias_Provide_MiddlewareConfig_ProvideAuth) []middleware.Middleware {
-	return []middleware.Middleware{middleware.Middleware(p0), middleware.Middleware(p1)}
 }
 
 type FloraContainer struct {
@@ -136,7 +136,7 @@ type FloraContainer struct {
 
 	Server *http.Server
 
-	SliceOfController []controller.Controller
-
 	SliceOfMiddleware []middleware.Middleware
+
+	SliceOfController []controller.Controller
 }
