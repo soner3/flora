@@ -114,12 +114,13 @@ Use this for structs that you own and write yourself (e.g., Services, Handlers, 
 You can override the default behavior using the `flora` struct tag. Multiple tags can be combined using commas.
 
 | Tag | Example | Description |
-| --- | --- | --- |
-| `constructor` | `flora:"constructor=BuildApp"` | Overrides the default `New<StructName>` constructor lookup. |
-| `primary` | `flora:"primary"` | Resolves interface collisions. If multiple structs implement the same interface, the primary one is injected. |
-| `scope` | `flora:"scope=prototype"` | Changes the lifecycle to a Factory function (a fresh instance is created per injection). |
-| `order` | `flora:"order=1"` | Defines the sorting order when the component is injected via Slice (`[]Interface`). |
-| *(Empty)* | `flora:""` | Explicitly marks a component with default rules (optional, embedding the struct is usually enough). |
+| :--- | :--- | :--- |
+| *(Shorthand)* | ``flora:"BuildApp"`` | Any string without a key-value pair is automatically treated as the `constructor` name. |
+| `constructor` | ``flora:"constructor=BuildApp"`` | Explicitly overrides the default `New<StructName>` constructor lookup. |
+| `primary` | ``flora:"primary"`` | Resolves interface collisions. If multiple structs implement the same interface, the primary one is injected. |
+| `scope` | ``flora:"scope=prototype"`` | Changes the lifecycle to a Factory function (a fresh instance is created per injection). |
+| `order` | ``flora:"order=1"`` | Defines the sorting order when the component is injected via Slice (`[]Interface`). |
+| *(Empty)* | ``flora:""`` | Explicitly marks a component with default rules (optional, embedding the struct is usually enough). |
 
 ### 2. `flora.Configuration` (For Third-Party & Adapters)
 
