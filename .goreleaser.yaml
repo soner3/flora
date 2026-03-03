@@ -28,8 +28,8 @@ builds:
     main: ./cmd/flora/main.go
     ldflags:
       - -s -w
-      - -X github.com/soner3/flora/cmd.Version={{.Version}}
-      - -X github.com/soner3/flora/cmd.Build={{.ShortCommit}}
+      - "-X github.com/soner3/flora/cmd.Version={{.Version}}"
+      - "-X github.com/soner3/flora/cmd.Build={{.ShortCommit}}"
 
 archives:
   - formats:
