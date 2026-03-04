@@ -214,7 +214,7 @@ func NewServer(middlewares []Middleware) *Server {
 
 ## Learn by Example
 
-The best way to master Flora is by looking at the provided examples. Check out the **[`/examples`](https://www.google.com/search?q=./examples)** directory in this repository. It contains focused, runnable scenarios ranging from basic to advanced:
+The best way to master Flora is by looking at the provided examples. Check out the **[`/examples`](https://github.com/soner3/flora/tree/master/examples)** directory in this repository. It contains focused, runnable scenarios ranging from basic to advanced:
 
 * **`01_basic_component`**: The absolute basics. Struct embedding, interfaces, and auto-wiring.
 * **`02_configuration`**: How to use `@Configuration` to integrate external packages and manage graceful shutdowns (`cleanup func()`).
