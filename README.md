@@ -90,7 +90,7 @@ func NewApp(g *Greeter) *App {
 Generate the container by running the CLI in your project root:
 
 ```bash
-flora gen -i ./... -o .
+flora gen -i . -o .
 
 ```
 
