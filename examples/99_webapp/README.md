@@ -13,7 +13,7 @@ With Flora, adding a new endpoint or middleware is as simple as creating a new s
 
 ## How to run
 
-1.  Generate the DI container (`flora_container.go`) in the current directory. We use `-i ./...` to tell Flora to scan all subdirectories:
+1.  Generate the DI container (`flora_container.go`) in the current directory. We use `-i .` to tell Flora to scan all directories in the root dir:
     ```bash
     flora gen -i . -o .
     ```
