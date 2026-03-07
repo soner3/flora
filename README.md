@@ -6,7 +6,7 @@
 
   <h1>Flora</h1>
   <p><b>Compile-time Dependency Injection for Go.</b><br/>
-  <i>Spring-like convenience, zero runtime overhead, and absolutely no magic.</i></p>
+  <i>Automated wiring, zero runtime overhead, and absolutely no magic.</i></p>
 
   <p>
     <a href="https://pkg.go.dev/github.com/soner3/flora"><img src="https://pkg.go.dev/badge/github.com/soner3/flora.svg" alt="Go Reference"></a>
