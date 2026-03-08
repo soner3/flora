@@ -224,6 +224,18 @@ The best way to master Flora is by looking at the provided examples. Check out t
 
 ---
 
+## Roadmap (What's Next)
+
+Flora v1.0.0 is stable and production-ready, but we are just getting started! Here are some of the major features planned for future releases. If you are interested in any of these, feel free to open an issue!
+
+* **Named Dependencies (Qualifiers):** Support for tags like `flora:"qualifier=masterDB"` to easily manage multiple instances of the same interface or struct type (e.g., a Master and a Replica Database).
+* **Graph Visualization:** A `flora graph` command that exports your entire architectural dependency graph into a visual Mermaid diagram.
+* **CLI Watch Mode:** A `flora gen --watch` flag that runs in the background and instantly updates your `flora_container.go` file whenever you save a Go file, for a seamless developer experience.
+* **Test Environments & Mock Swapping:** A dedicated `flora gen --test` mode that generates a testing container, allowing you to easily swap out deep dependencies with mocks (e.g., via `gomock`) for integration tests.
+* **Generics Support (Go 1.18+):** Full AST resolution for generic repositories and services (e.g., `NewGenericRepo[T any]()`) to eliminate even more boilerplate code.
+
+---
+
 ## License & Acknowledgments
 
 Flora is released under the **Apache 2.0 License**.
