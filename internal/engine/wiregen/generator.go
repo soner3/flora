@@ -33,6 +33,12 @@ import (
 	"github.com/soner3/flora/internal/errs"
 )
 
+const (
+	ContainerFileName = "flora_container.go"
+	WireFileName      = "wire_gen.go"
+	InjectorFileName  = "flora_injector.go"
+)
+
 var (
 	ErrResolveOutputDir     = errors.New("failed to resolve absolute output directory")
 	ErrCreateOutputDir      = errors.New("failed to create output directory")
@@ -63,6 +69,18 @@ func isBuiltInType(name string) bool {
 	return false
 }
 
+func sanitize(name string) string {
+	var sb strings.Builder
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' {
+			sb.WriteRune(r)
+		} else {
+			sb.WriteRune('_')
+		}
+	}
+	return sb.String()
+}
+
 var wireTemplate = `//go:build wireinject
 // +build wireinject
 
@@ -75,88 +93,120 @@ import (
     {{end}}
 )
 
-{{range .ConfigWrappers}}
+// --- 1. Type Aliases for Qualifiers ---
+{{range .Aliases}}
+type {{.AliasName}} {{.OriginalType}}
+{{end}}
+
+// --- 2. Wrappers for Components and Configurations ---
+{{range .Wrappers}}
 {{if .IsPrototype}}
 func {{.WrapperName}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.Name}} {{$param.Type}}{{end}}) func() ({{.ReturnType}}{{if .HasCleanup}}, func(){{end}}{{if .HasError}}, error{{end}}) {
     return func() ({{.ReturnType}}{{if .HasCleanup}}, func(){{end}}{{if .HasError}}, error{{end}}) {
-        cfg := {{.ConfigPackagePrefix}}{{.ConfigStructName}}{}
-        return cfg.{{.ConfigMethodName}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.Name}}{{end}})
+        {{if .IsConfig}}
+        flora_cfg_struct := {{.ConfigPrefix}}{{.ConfigStruct}}{}
+        return flora_cfg_struct.{{.ConfigMethod}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.CastCall}}{{end}})
+        {{else}}
+        return {{.DirectCall}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.CastCall}}{{end}})
+        {{end}}
     }
 }
 {{else}}
-{{if .NeedsAlias}}type {{.AliasName}} {{.ReturnType}}{{end}}
-func {{.WrapperName}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.Name}} {{$param.Type}}{{end}}) ({{if .NeedsAlias}}{{.AliasName}}{{else}}{{.ReturnType}}{{end}}{{if .HasCleanup}}, func(){{end}}{{if .HasError}}, error{{end}}) {
-    cfg := {{.ConfigPackagePrefix}}{{.ConfigStructName}}{}
+func {{.WrapperName}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.Name}} {{$param.Type}}{{end}}) ({{.ReturnType}}{{if .HasCleanup}}, func(){{end}}{{if .HasError}}, error{{end}}) {
+    {{if .IsConfig}}
+    flora_cfg_struct := {{.ConfigPrefix}}{{.ConfigStruct}}{}
     {{if and .HasCleanup .HasError}}
-    val, cleanup, err := cfg.{{.ConfigMethodName}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.Name}}{{end}})
-    return {{if .NeedsAlias}}{{.AliasName}}(val){{else}}val{{end}}, cleanup, err
+    val, cleanup, err := flora_cfg_struct.{{.ConfigMethod}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.CastCall}}{{end}})
     {{else if .HasCleanup}}
-    val, cleanup := cfg.{{.ConfigMethodName}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.Name}}{{end}})
-    return {{if .NeedsAlias}}{{.AliasName}}(val){{else}}val{{end}}, cleanup
+    val, cleanup := flora_cfg_struct.{{.ConfigMethod}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.CastCall}}{{end}})
     {{else if .HasError}}
-    val, err := cfg.{{.ConfigMethodName}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.Name}}{{end}})
-    return {{if .NeedsAlias}}{{.AliasName}}(val){{else}}val{{end}}, err
+    val, err := flora_cfg_struct.{{.ConfigMethod}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.CastCall}}{{end}})
     {{else}}
-    val := cfg.{{.ConfigMethodName}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.Name}}{{end}})
-    return {{if .NeedsAlias}}{{.AliasName}}(val){{else}}val{{end}}
+    val := flora_cfg_struct.{{.ConfigMethod}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.CastCall}}{{end}})
+    {{end}}
+    {{else}}
+    {{if and .HasCleanup .HasError}}
+    val, cleanup, err := {{.DirectCall}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.CastCall}}{{end}})
+    {{else if .HasCleanup}}
+    val, cleanup := {{.DirectCall}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.CastCall}}{{end}})
+    {{else if .HasError}}
+    val, err := {{.DirectCall}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.CastCall}}{{end}})
+    {{else}}
+    val := {{.DirectCall}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.CastCall}}{{end}})
+    {{end}}
+    {{end}}
+
+    {{if .NeedsProviderAlias}}
+    return {{.ReturnType}}(val){{if .HasCleanup}}, cleanup{{end}}{{if .HasError}}, err{{end}}
+    {{else}}
+    return val{{if .HasCleanup}}, cleanup{{end}}{{if .HasError}}, err{{end}}
     {{end}}
 }
 {{end}}
 {{end}}
 
-{{range .PrimaryAliases}}
-func ProvidePrimary_{{.AliasName}}(val {{.AliasName}}) {{.ReturnType}} {
-    return {{.ReturnType}}(val)
+// --- 3. Interface Bindings (Resolves aliases losing methods) ---
+{{range .Bindings}}
+func {{.WrapperName}}(val {{.ParamType}}) {{.InterfaceType}} {
+    return ({{.OriginalType}})(val)
 }
 {{end}}
 
-{{range .Prototypes}}
-{{if not .IsConfig}}
-func {{.WrapperName}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.Name}} {{$param.Type}}{{end}}) func() ({{.ReturnType}}{{if .HasCleanup}}, func(){{end}}{{if .HasError}}, error{{end}}) {
-    return func() ({{.ReturnType}}{{if .HasCleanup}}, func(){{end}}{{if .HasError}}, error{{end}}) {
-        return {{.ConstructorCall}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.Name}}{{end}})
+// --- 3b. Prototype Interface Bindings ---
+{{range .PrototypeBindings}}
+func {{.WrapperName}}(factory {{.ParamType}}) func() ({{.InterfaceType}}{{if .HasCleanup}}, func(){{end}}{{if .HasError}}, error{{end}}) {
+    return func() ({{.InterfaceType}}{{if .HasCleanup}}, func(){{end}}{{if .HasError}}, error{{end}}) {
+        {{if and .HasCleanup .HasError}}
+        val, cleanup, err := factory()
+        return val, cleanup, err
+        {{else if .HasCleanup}}
+        val, cleanup := factory()
+        return val, cleanup
+        {{else if .HasError}}
+        val, err := factory()
+        return val, err
+        {{else}}
+        return factory()
+        {{end}}
     }
 }
 {{end}}
-{{end}}
 
+// --- 4. Slice Bindings ---
 {{range .SliceBindings}}
-{{$prefix := .InterfacePrefix}}
-{{$name := .InterfaceName}}
-func ProvideSliceOf{{.InterfaceName}}({{range .Implementations}}{{.ParamName}} {{.ParamType}}, {{end}}) []{{.InterfacePrefix}}{{.InterfaceName}} {
-    return []{{.InterfacePrefix}}{{.InterfaceName}}{
-        {{range .Implementations}}{{if .NeedsAlias}}{{$prefix}}{{$name}}({{.ParamName}}){{else}}{{.ParamName}}{{end}},{{end}}
+func ProvideSliceOf{{.InterfaceName}}({{range $index, $impl := .Implementations}}{{if $index}}, {{end}}{{$impl.ParamName}} {{$impl.ParamType}}{{end}}) []{{.InterfaceType}} {
+    return []{{.InterfaceType}}{
+        {{range .Implementations}}({{.OriginalType}})({{.ParamName}}),{{end}}
     }
+}
+{{end}}
+
+// --- 5. Primary Aliases (Fallback for standard injection) ---
+{{range .PrimaryAliases}}
+func ProvidePrimary_{{.AliasName}}(val {{.AliasName}}) {{.OriginalType}} {
+    return ({{.OriginalType}})(val)
 }
 {{end}}
 
 type FloraContainer struct {
-    {{range .Providers}}
-    {{.FieldName}} {{.FieldType}}
-    {{end}}
-    
-    {{range .Prototypes}}
-    {{.FieldName}} func() ({{.ReturnType}}{{if .HasCleanup}}, func(){{end}}{{if .HasError}}, error{{end}})
-    {{end}}
-
-    {{range .SliceBindings}}
-    SliceOf{{.InterfaceName}} []{{.InterfacePrefix}}{{.InterfaceName}}
+    {{range .Fields}}
+    {{.Name}} {{.Type}}
     {{end}}
 }
 
 func InitializeContainer() (*FloraContainer, func(), error) {
     wire.Build(
         {{range .Providers}}
-        {{.CallPrefix}}{{.ConstructorName}},
+        {{.Call}},
         {{end}}
         {{range .PrimaryAliases}}
         ProvidePrimary_{{.AliasName}},
         {{end}}
-        {{range .Prototypes}}
+        {{range .Bindings}}
         {{.WrapperName}},
         {{end}}
-        {{range .Bindings}}
-        wire.Bind(new({{.InterfacePrefix}}{{.InterfaceName}}), new({{if .IsPointer}}*{{end}}{{.ComponentPrefix}}{{.StructName}})),
+        {{range .PrototypeBindings}}
+        {{.WrapperName}},
         {{end}}
         {{range .SliceBindings}}
         ProvideSliceOf{{.InterfaceName}},
@@ -167,84 +217,87 @@ func InitializeContainer() (*FloraContainer, func(), error) {
 }
 `
 
-type providerData struct {
-	FieldName       string
-	FieldType       string
-	CallPrefix      string
-	ConstructorName string
+type aliasData struct {
+	AliasName    string
+	OriginalType string
 }
 
 type paramData struct {
-	Name string
-	Type string
+	Name     string
+	Type     string
+	CastCall string
 }
 
-type prototypeData struct {
-	WrapperName     string
-	FieldName       string
-	ConstructorCall string
-	ReturnType      string
-	Params          []paramData
-	HasCleanup      bool
-	HasError        bool
-	IsConfig        bool
-}
-
-type configWrapperData struct {
-	WrapperName         string
-	ConfigPackagePrefix string
-	ConfigStructName    string
-	ConfigMethodName    string
-	ReturnType          string
-	Params              []paramData
-	HasCleanup          bool
-	HasError            bool
-	IsPrototype         bool
-	NeedsAlias          bool
-	AliasName           string
+type wrapperData struct {
+	WrapperName        string
+	IsConfig           bool
+	ConfigPrefix       string
+	ConfigStruct       string
+	ConfigMethod       string
+	DirectCall         string
+	Params             []paramData
+	ReturnType         string
+	HasCleanup         bool
+	HasError           bool
+	IsPrototype        bool
+	NeedsProviderAlias bool
 }
 
 type bindingData struct {
-	InterfacePrefix string
-	InterfaceName   string
-	ComponentPrefix string
-	StructName      string
-	IsPointer       bool
+	WrapperName   string
+	ParamType     string
+	OriginalType  string
+	InterfaceType string
+}
+
+// NEU: Diese Struct hat vorhin gefehlt!
+type prototypeBindingData struct {
+	WrapperName   string
+	ParamType     string
+	InterfaceType string
+	HasCleanup    bool
+	HasError      bool
 }
 
 type sliceImplData struct {
-	ParamName  string
-	ParamType  string
-	NeedsAlias bool
+	ParamName    string
+	ParamType    string
+	OriginalType string
 }
 
 type sliceBindingData struct {
-	InterfacePrefix string
 	InterfaceName   string
+	InterfaceType   string
 	Implementations []sliceImplData
 }
 
 type primaryAliasData struct {
-	AliasName  string
-	ReturnType string
+	AliasName    string
+	OriginalType string
 }
 
+type containerField struct {
+	Name string
+	Type string
+}
+
+type providerData struct {
+	Call string
+}
+
+// NEU: PrototypeBindings wurde hier hinzugefügt!
 type templateData struct {
-	PackageName    string
-	Imports        []string
-	Providers      []providerData
-	Prototypes     []prototypeData
-	ConfigWrappers []configWrapperData
-	Bindings       []bindingData
-	SliceBindings  []sliceBindingData
-	PrimaryAliases []primaryAliasData
+	PackageName       string
+	Imports           []string
+	Aliases           map[string]aliasData
+	Wrappers          []wrapperData
+	Bindings          []bindingData
+	PrototypeBindings []prototypeBindingData
+	SliceBindings     []sliceBindingData
+	PrimaryAliases    []primaryAliasData
+	Providers         []providerData
+	Fields            []containerField
 }
-
-const (
-	ContainerFileName = "flora_container.go"
-	WireFileName      = "wire_gen.go"
-	InjectorFileName  = "flora_injector.go"
-)
 
 func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext) error {
 	log := slog.With("pkg", "wiregen")
@@ -282,67 +335,76 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 		}
 	}
 
-	data := templateData{
-		PackageName: pkgName,
-	}
-
-	typeCount := make(map[string]int)
-	for _, comp := range genCtx.Components {
-		isBuiltIn := isBuiltInType(comp.StructName)
-		compPrefix := ""
-		if comp.PackageName != pkgName && !isBuiltIn {
-			compPrefix = comp.PackageName + "."
-		}
-		retType := compPrefix + comp.StructName
-		if comp.IsPointer {
-			retType = "*" + retType
-		}
-		typeCount[retType]++
-	}
-
-	var providers []providerData
-	var prototypes []prototypeData
-	var configWrappers []configWrapperData
-	var bindings []bindingData
-	var primaryAliases []primaryAliasData
 	importSet := make(map[string]bool)
+	typeCount := make(map[string]int)
+	reqQualifiers := make(map[string]bool)
+
+	formatType := func(pkgName, pkgPath, structName string, isPointer bool) string {
+		prefix := ""
+		if !isBuiltInType(structName) {
+			prefix = pkgName + "."
+			importSet[pkgPath] = true
+		}
+		ret := prefix + structName
+		if isPointer {
+			ret = "*" + ret
+		}
+		return ret
+	}
+
+	formatParamType := func(pType string) string {
+		pType = strings.ReplaceAll(pType, "*"+pkgName+".", "*")
+		pType = strings.ReplaceAll(pType, "[]"+pkgName+".", "[]")
+		if after, ok := strings.CutPrefix(pType, pkgName+"."); ok {
+			pType = after
+		}
+		return pType
+	}
+
+	// Pass 1: Count types & collect requested qualifiers
+	for _, comp := range genCtx.Components {
+		retType := formatType(comp.PackageName, comp.PackagePath, comp.StructName, comp.IsPointer)
+		typeCount[retType]++
+
+		for _, p := range comp.Params {
+			for _, imp := range p.Imports {
+				importSet[imp] = true
+			}
+			if p.RequestedQualifier != "" {
+				reqQualifiers[p.RequestedQualifier] = true
+			}
+		}
+	}
+
+	var wrappers []wrapperData
+	var bindings []bindingData
+	var prototypeBindings []prototypeBindingData // NEU: Array für die Prototype-Bindings
+	var primaryAliases []primaryAliasData
+	var providers []providerData
+	var fields []containerField
+	aliases := make(map[string]aliasData)
 
 	for _, comp := range genCtx.Components {
-		isConfig := comp.ConfigStructName != ""
 		isBuiltIn := isBuiltInType(comp.StructName)
+		isPrototype := comp.Scope == "prototype"
+		isConfig := comp.ConfigStructName != ""
 
 		compPrefix := ""
 		if comp.PackageName != pkgName && !isBuiltIn {
 			if comp.PackageName == "main" {
-				return errs.Wrap(ErrMainComponentLeak, "cannot generate container in package '%s' because component '%s' belongs to package 'main'. Change output dir (-o) to your main directory or move the component.", pkgName, comp.StructName)
+				return errs.Wrap(ErrMainComponentLeak, "cannot generate container in package '%s' because component '%s' belongs to package 'main'", pkgName, comp.StructName)
 			}
 			compPrefix = comp.PackageName + "."
 			importSet[comp.PackagePath] = true
 		}
 
 		configPkgPrefix := ""
-		if isConfig {
-			if comp.ConfigPackageName != pkgName {
-				if comp.ConfigPackageName == "main" {
-					return errs.Wrap(ErrMainComponentLeak, "cannot generate container because config '%s' belongs to package 'main'.", comp.ConfigStructName)
-				}
-				configPkgPrefix = comp.ConfigPackageName + "."
-				importSet[comp.ConfigPackagePath] = true
+		if isConfig && comp.ConfigPackageName != pkgName {
+			if comp.ConfigPackageName == "main" {
+				return errs.Wrap(ErrMainComponentLeak, "cannot generate container because config '%s' belongs to package 'main'.", comp.ConfigStructName)
 			}
-		}
-
-		var pData []paramData
-		for _, p := range comp.Params {
-			for _, imp := range p.Imports {
-				importSet[imp] = true
-			}
-			pType := p.Type
-			pType = strings.ReplaceAll(pType, "*"+pkgName+".", "*")
-			pType = strings.ReplaceAll(pType, "[]"+pkgName+".", "[]")
-			if after, ok := strings.CutPrefix(pType, pkgName+"."); ok {
-				pType = after
-			}
-			pData = append(pData, paramData{Name: p.Name, Type: pType})
+			configPkgPrefix = comp.ConfigPackageName + "."
+			importSet[comp.ConfigPackagePath] = true
 		}
 
 		retType := compPrefix + comp.StructName
@@ -350,126 +412,133 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 			retType = "*" + retType
 		}
 
-		needsAlias := isConfig && comp.Scope != "prototype" && typeCount[retType] > 1
-		aliasName := ""
-		if needsAlias {
-			aliasName = "FloraAlias_" + comp.ConstructorName
+		needsProviderAlias := typeCount[retType] > 1 || reqQualifiers[comp.QualifierName]
+
+		providerAliasName := "FloraQualifier_" + sanitize(comp.QualifierName)
+		if typeCount[retType] > 1 && comp.QualifierName == comp.StructName {
+			providerAliasName = "FloraAlias_" + sanitize(comp.ConstructorName)
 		}
 
-		if comp.Scope == "prototype" {
-			wrapperName := "ProvidePrototype" + comp.StructName
-			if isConfig {
-				wrapperName = "ProvidePrototype_" + comp.ConfigStructName + "_" + comp.ConfigMethodName
-				configWrappers = append(configWrappers, configWrapperData{
-					WrapperName:         wrapperName,
-					ConfigPackagePrefix: configPkgPrefix,
-					ConfigStructName:    comp.ConfigStructName,
-					ConfigMethodName:    comp.ConfigMethodName,
-					ReturnType:          retType,
-					Params:              pData,
-					HasCleanup:          comp.HasCleanup,
-					HasError:            comp.HasError,
-					IsPrototype:         true,
-					NeedsAlias:          false,
-				})
+		if needsProviderAlias {
+			aliases[providerAliasName] = aliasData{
+				AliasName:    providerAliasName,
+				OriginalType: retType,
 			}
+		}
 
-			prototypes = append(prototypes, prototypeData{
-				WrapperName:     wrapperName,
-				FieldName:       comp.StructName + "Factory",
-				ConstructorCall: compPrefix + comp.ConstructorName,
-				ReturnType:      retType,
-				Params:          pData,
-				HasCleanup:      comp.HasCleanup,
-				HasError:        comp.HasError,
-				IsConfig:        isConfig,
+		var pData []paramData
+		needsWrapper := isConfig || isPrototype || needsProviderAlias
+
+		for _, p := range comp.Params {
+			pType := formatParamType(p.Type)
+			castCall := p.Name
+
+			if p.RequestedQualifier != "" {
+				needsWrapper = true
+				aliasName := "FloraQualifier_" + sanitize(p.RequestedQualifier)
+				pType = aliasName
+				castCall = fmt.Sprintf("(%s)(%s)", formatParamType(p.Type), p.Name)
+			}
+			pData = append(pData, paramData{Name: p.Name, Type: pType, CastCall: castCall})
+		}
+
+		finalReturnType := retType
+		if needsProviderAlias {
+			finalReturnType = providerAliasName
+		}
+
+		wrapperName := "ProvideWrapper_" + sanitize(comp.ConstructorName)
+		if isConfig {
+			wrapperName = "ProvideWrapper_" + sanitize(comp.ConfigStructName) + "_" + sanitize(comp.ConfigMethodName)
+		}
+
+		if needsWrapper {
+			wrappers = append(wrappers, wrapperData{
+				WrapperName:        wrapperName,
+				IsConfig:           isConfig,
+				ConfigPrefix:       configPkgPrefix,
+				ConfigStruct:       comp.ConfigStructName,
+				ConfigMethod:       comp.ConfigMethodName,
+				DirectCall:         compPrefix + comp.ConstructorName,
+				Params:             pData,
+				ReturnType:         finalReturnType,
+				HasCleanup:         comp.HasCleanup,
+				HasError:           comp.HasError,
+				IsPrototype:        isPrototype,
+				NeedsProviderAlias: needsProviderAlias,
 			})
-
-			for _, iface := range comp.Implements {
-				ifacePrefix := ""
-				if iface.PackageName != pkgName {
-					if iface.PackageName == "main" {
-						return errs.Wrap(ErrMainInterfaceLeak, "cannot generate container in package '%s' because interface '%s' belongs to package 'main'. Change output dir (-o) to your main directory or move the interface.", pkgName, iface.InterfaceName)
-					}
-					ifacePrefix = iface.PackageName + "."
-					importSet[iface.PackagePath] = true
-				}
-
-				prototypes = append(prototypes, prototypeData{
-					WrapperName:     "ProvidePrototype" + comp.StructName + "As" + iface.InterfaceName,
-					FieldName:       iface.InterfaceName + "Factory",
-					ConstructorCall: compPrefix + comp.ConstructorName,
-					ReturnType:      ifacePrefix + iface.InterfaceName,
-					Params:          pData,
-					HasCleanup:      comp.HasCleanup,
-					HasError:        comp.HasError,
-					IsConfig:        isConfig,
-				})
-			}
-
+			providers = append(providers, providerData{Call: wrapperName})
 		} else {
-			wrapperName := comp.ConstructorName
-			callPrefix := compPrefix
+			providers = append(providers, providerData{Call: compPrefix + comp.ConstructorName})
+		}
 
-			if isConfig {
-				callPrefix = ""
-				configWrappers = append(configWrappers, configWrapperData{
-					WrapperName:         wrapperName,
-					ConfigPackagePrefix: configPkgPrefix,
-					ConfigStructName:    comp.ConfigStructName,
-					ConfigMethodName:    comp.ConfigMethodName,
-					ReturnType:          retType,
-					Params:              pData,
-					HasCleanup:          comp.HasCleanup,
-					HasError:            comp.HasError,
-					IsPrototype:         false,
-					NeedsAlias:          needsAlias,
-					AliasName:           aliasName,
+		for _, iface := range comp.Implements {
+			ifacePrefix := ""
+			if iface.PackageName != pkgName {
+				if iface.PackageName == "main" {
+					return errs.Wrap(ErrMainInterfaceLeak, "interface belongs to package 'main'")
+				}
+				ifacePrefix = iface.PackageName + "."
+				importSet[iface.PackagePath] = true
+			}
+
+			if isPrototype {
+				// Logik für Factory-Interfaces!
+				retSig := finalReturnType
+				if comp.HasCleanup && comp.HasError {
+					retSig += ", func(), error"
+				} else if comp.HasCleanup {
+					retSig += ", func()"
+				} else if comp.HasError {
+					retSig += ", error"
+				}
+				paramType := "func() (" + retSig + ")"
+
+				pbWrapperName := fmt.Sprintf("ProvidePrototypeBinding_%s_As_%s", sanitize(comp.QualifierName), sanitize(iface.InterfaceName))
+				prototypeBindings = append(prototypeBindings, prototypeBindingData{
+					WrapperName:   pbWrapperName,
+					ParamType:     paramType,
+					InterfaceType: ifacePrefix + iface.InterfaceName,
+					HasCleanup:    comp.HasCleanup,
+					HasError:      comp.HasError,
 				})
 
-				if needsAlias && comp.IsPrimary {
-					primaryAliases = append(primaryAliases, primaryAliasData{
-						AliasName:  aliasName,
-						ReturnType: retType,
-					})
-				}
-			}
-
-			fieldName := comp.StructName
-			if typeCount[retType] > 1 {
-				fieldName = comp.ConstructorName
-			}
-
-			fieldType := retType
-			if needsAlias {
-				fieldType = aliasName
-			}
-
-			providers = append(providers, providerData{
-				FieldName:       fieldName,
-				FieldType:       fieldType,
-				CallPrefix:      callPrefix,
-				ConstructorName: wrapperName,
-			})
-
-			for _, iface := range comp.Implements {
-				ifacePrefix := ""
-				if iface.PackageName != pkgName {
-					if iface.PackageName == "main" {
-						return errs.Wrap(ErrMainInterfaceLeak, "cannot generate container in package '%s' because interface '%s' belongs to package 'main'. Change output dir (-o) to your main directory or move the interface.", pkgName, iface.InterfaceName)
-					}
-					ifacePrefix = iface.PackageName + "."
-					importSet[iface.PackagePath] = true
-				}
-
+			} else {
+				// Normale Singleton Interfaces
+				bWrapperName := fmt.Sprintf("ProvideBinding_%s_As_%s", sanitize(comp.QualifierName), sanitize(iface.InterfaceName))
 				bindings = append(bindings, bindingData{
-					InterfacePrefix: ifacePrefix,
-					InterfaceName:   iface.InterfaceName,
-					ComponentPrefix: compPrefix,
-					StructName:      comp.StructName,
-					IsPointer:       comp.IsPointer,
+					WrapperName:   bWrapperName,
+					ParamType:     finalReturnType,
+					OriginalType:  retType,
+					InterfaceType: ifacePrefix + iface.InterfaceName,
 				})
 			}
+		}
+
+		if needsProviderAlias && comp.IsPrimary {
+			primaryAliases = append(primaryAliases, primaryAliasData{
+				AliasName:    providerAliasName,
+				OriginalType: retType,
+			})
+		}
+
+		fieldName := sanitize(comp.QualifierName)
+		if typeCount[retType] > 1 {
+			fieldName = sanitize(comp.ConstructorName)
+		}
+
+		if isPrototype {
+			retSig := finalReturnType
+			if comp.HasCleanup && comp.HasError {
+				retSig += ", func(), error"
+			} else if comp.HasCleanup {
+				retSig += ", func()"
+			} else if comp.HasError {
+				retSig += ", error"
+			}
+			fields = append(fields, containerField{Name: fieldName + "Factory", Type: "func() (" + retSig + ")"})
+		} else {
+			fields = append(fields, containerField{Name: fieldName, Type: finalReturnType})
 		}
 	}
 
@@ -478,6 +547,7 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 		slices.SortFunc(sb.Implementations, func(a, b *engine.ComponentMetadata) int {
 			return cmp.Compare(a.Order, b.Order)
 		})
+
 		ifacePrefix := ""
 		if sb.Interface.PackageName != pkgName && sb.Interface.PackageName != "main" {
 			ifacePrefix = sb.Interface.PackageName + "."
@@ -487,41 +557,49 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 		var impls []sliceImplData
 		for i, impl := range sb.Implementations {
 			implPrefix := ""
-			if impl.PackageName != pkgName && impl.PackageName != "main" && !isBuiltInType(impl.StructName) {
+			if impl.PackageName != pkgName && !isBuiltInType(impl.StructName) {
 				implPrefix = impl.PackageName + "."
-				importSet[impl.PackagePath] = true
 			}
 			implRetType := implPrefix + impl.StructName
 			if impl.IsPointer {
 				implRetType = "*" + implRetType
 			}
 
-			implNeedsAlias := impl.ConfigStructName != "" && impl.Scope != "prototype" && typeCount[implRetType] > 1
+			implNeedsAlias := typeCount[implRetType] > 1 || reqQualifiers[impl.QualifierName]
 			paramType := implRetType
 			if implNeedsAlias {
-				paramType = "FloraAlias_" + impl.ConstructorName
+				if typeCount[implRetType] > 1 && impl.QualifierName == impl.StructName {
+					paramType = "FloraAlias_" + sanitize(impl.ConstructorName)
+				} else {
+					paramType = "FloraQualifier_" + sanitize(impl.QualifierName)
+				}
 			}
 
 			impls = append(impls, sliceImplData{
-				ParamName:  fmt.Sprintf("p%d", i),
-				ParamType:  paramType,
-				NeedsAlias: implNeedsAlias,
+				ParamName:    fmt.Sprintf("p%d", i),
+				ParamType:    paramType,
+				OriginalType: implRetType,
 			})
 		}
 
 		sliceBindingsData = append(sliceBindingsData, sliceBindingData{
-			InterfacePrefix: ifacePrefix,
 			InterfaceName:   sb.Interface.InterfaceName,
+			InterfaceType:   ifacePrefix + sb.Interface.InterfaceName,
 			Implementations: impls,
 		})
 	}
 
-	data.Providers = providers
-	data.Prototypes = prototypes
-	data.ConfigWrappers = configWrappers
-	data.Bindings = bindings
-	data.SliceBindings = sliceBindingsData
-	data.PrimaryAliases = primaryAliases
+	data := templateData{
+		PackageName:       pkgName,
+		Aliases:           aliases,
+		Wrappers:          wrappers,
+		Bindings:          bindings,
+		PrototypeBindings: prototypeBindings, // NEU: Eingefügt!
+		SliceBindings:     sliceBindingsData,
+		PrimaryAliases:    primaryAliases,
+		Providers:         providers,
+		Fields:            fields,
+	}
 
 	for imp := range importSet {
 		if generatedPkgPath != "" && imp == generatedPkgPath {

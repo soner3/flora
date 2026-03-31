@@ -21,20 +21,21 @@ import (
 
 func InitializeContainer() (*FloraContainer, func(), error) {
 	appConfig := config.NewAppConfig()
-	db, cleanup, err := Provide_DBConfig_ProvideDatabase(appConfig)
+	db, cleanup, err := ProvideWrapper_DBConfig_ProvideDatabase(appConfig)
 	if err != nil {
 		return nil, nil, err
 	}
 	bookRepository := repository.NewBookRepository(db)
-	bookService := service.ProvideBookService(bookRepository)
+	serviceBookRepository := ProvideBinding_BookRepository_As_BookRepository(bookRepository)
+	bookService := service.ProvideBookService(serviceBookRepository)
 	bookHandler := controller.NewBookHandler(bookService)
 	helloHandler := controller.NewHelloHandler()
-	floraAlias_Provide_MiddlewareConfig_ProvideLogger := Provide_MiddlewareConfig_ProvideLogger()
-	floraAlias_Provide_MiddlewareConfig_ProvideAuth := Provide_MiddlewareConfig_ProvideAuth(bookRepository)
+	floraAlias_Provide_MiddlewareConfig_ProvideLogger := ProvideWrapper_MiddlewareConfig_ProvideLogger()
+	floraAlias_Provide_MiddlewareConfig_ProvideAuth := ProvideWrapper_MiddlewareConfig_ProvideAuth(bookRepository)
 	v := ProvideSliceOfController(bookHandler, helloHandler)
 	v2 := ProvideSliceOfMiddleware(floraAlias_Provide_MiddlewareConfig_ProvideLogger, floraAlias_Provide_MiddlewareConfig_ProvideAuth)
-	handler := Provide_WebConfig_ProvideRouter(v, v2)
-	server, cleanup2, err := Provide_WebConfig_ProvideServer(appConfig, handler)
+	handler := ProvideWrapper_WebConfig_ProvideRouter(v, v2)
+	server, cleanup2, err := ProvideWrapper_WebConfig_ProvideServer(appConfig, handler)
 	if err != nil {
 		cleanup()
 		return nil, nil, err
@@ -50,8 +51,6 @@ func InitializeContainer() (*FloraContainer, func(), error) {
 		Provide_MiddlewareConfig_ProvideAuth:   floraAlias_Provide_MiddlewareConfig_ProvideAuth,
 		Handler:                                handler,
 		Server:                                 server,
-		SliceOfController:                      v,
-		SliceOfMiddleware:                      v2,
 	}
 	return floraContainer, func() {
 		cleanup2()
@@ -61,58 +60,74 @@ func InitializeContainer() (*FloraContainer, func(), error) {
 
 // flora_injector.go:
 
-func Provide_DBConfig_ProvideDatabase(p0 *config.AppConfig) (*sql.DB, func(), error) {
-	cfg := infrastructure.DBConfig{}
+type FloraAlias_Provide_MiddlewareConfig_ProvideAuth middleware.Middleware
 
-	val, cleanup, err := cfg.ProvideDatabase(p0)
+type FloraAlias_Provide_MiddlewareConfig_ProvideLogger middleware.Middleware
+
+func ProvideWrapper_DBConfig_ProvideDatabase(cfg *config.AppConfig) (*sql.DB, func(), error) {
+
+	flora_cfg_struct := infrastructure.DBConfig{}
+
+	val, cleanup, err := flora_cfg_struct.ProvideDatabase(cfg)
+
 	return val, cleanup, err
 
 }
 
-type FloraAlias_Provide_MiddlewareConfig_ProvideLogger middleware.Middleware
+func ProvideWrapper_MiddlewareConfig_ProvideLogger() FloraAlias_Provide_MiddlewareConfig_ProvideLogger {
 
-func Provide_MiddlewareConfig_ProvideLogger() FloraAlias_Provide_MiddlewareConfig_ProvideLogger {
-	cfg := middleware.MiddlewareConfig{}
+	flora_cfg_struct := middleware.MiddlewareConfig{}
 
-	val := cfg.ProvideLogger()
+	val := flora_cfg_struct.ProvideLogger()
+
 	return FloraAlias_Provide_MiddlewareConfig_ProvideLogger(val)
 
 }
 
-type FloraAlias_Provide_MiddlewareConfig_ProvideAuth middleware.Middleware
+func ProvideWrapper_MiddlewareConfig_ProvideAuth(repo *repository.BookRepository) FloraAlias_Provide_MiddlewareConfig_ProvideAuth {
 
-func Provide_MiddlewareConfig_ProvideAuth(p0 *repository.BookRepository) FloraAlias_Provide_MiddlewareConfig_ProvideAuth {
-	cfg := middleware.MiddlewareConfig{}
+	flora_cfg_struct := middleware.MiddlewareConfig{}
 
-	val := cfg.ProvideAuth(p0)
+	val := flora_cfg_struct.ProvideAuth(repo)
+
 	return FloraAlias_Provide_MiddlewareConfig_ProvideAuth(val)
 
 }
 
-func Provide_WebConfig_ProvideRouter(p0 []controller.Controller, p1 []middleware.Middleware) http.Handler {
-	cfg := WebConfig{}
+func ProvideWrapper_WebConfig_ProvideRouter(controllers []controller.Controller, middleware2 []middleware.Middleware) http.Handler {
 
-	val := cfg.ProvideRouter(p0, p1)
+	flora_cfg_struct := WebConfig{}
+
+	val := flora_cfg_struct.ProvideRouter(controllers, middleware2)
+
 	return val
 
 }
 
-func Provide_WebConfig_ProvideServer(p0 *config.AppConfig, p1 http.Handler) (*http.Server, func(), error) {
-	cfg := WebConfig{}
+func ProvideWrapper_WebConfig_ProvideServer(cfg *config.AppConfig, handler http.Handler) (*http.Server, func(), error) {
 
-	val, cleanup, err := cfg.ProvideServer(p0, p1)
+	flora_cfg_struct := WebConfig{}
+
+	val, cleanup, err := flora_cfg_struct.ProvideServer(cfg, handler)
+
 	return val, cleanup, err
 
 }
 
+func ProvideBinding_BookRepository_As_BookRepository(val *repository.BookRepository) service.BookRepository {
+	return (*repository.BookRepository)(val)
+}
+
 func ProvideSliceOfController(p0 *controller.BookHandler, p1 *controller.HelloHandler) []controller.Controller {
 	return []controller.Controller{
-		p0, p1,
+		(*controller.BookHandler)(p0), (*controller.HelloHandler)(p1),
 	}
 }
 
 func ProvideSliceOfMiddleware(p0 FloraAlias_Provide_MiddlewareConfig_ProvideLogger, p1 FloraAlias_Provide_MiddlewareConfig_ProvideAuth) []middleware.Middleware {
-	return []middleware.Middleware{middleware.Middleware(p0), middleware.Middleware(p1)}
+	return []middleware.Middleware{
+		(middleware.Middleware)(p0), (middleware.Middleware)(p1),
+	}
 }
 
 type FloraContainer struct {
@@ -135,8 +150,4 @@ type FloraContainer struct {
 	Handler http.Handler
 
 	Server *http.Server
-
-	SliceOfController []controller.Controller
-
-	SliceOfMiddleware []middleware.Middleware
 }

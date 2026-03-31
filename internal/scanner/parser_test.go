@@ -17,6 +17,7 @@ package scanner
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/soner3/flora/internal/engine"
@@ -163,6 +164,16 @@ func TestParsePackages(t *testing.T) {
 			testdataPath: "testdata/happy",
 			expErr:       nil,
 		},
+		{
+			name:         "TestParsePackagesErrQualifierNotFound",
+			testdataPath: "testdata/err_qualifier_not_found",
+			expErr:       ErrInvalidMetadata,
+		},
+		{
+			name:         "TestParsePackagesErrInjectUnknownParam",
+			testdataPath: "testdata/err_inject_unknown_param",
+			expErr:       ErrInvalidMetadata,
+		},
 	}
 
 	for _, tc := range testcases {
@@ -221,4 +232,132 @@ func TestIsExported(t *testing.T) {
 
 	}
 
+}
+
+func TestParseFloraTag(t *testing.T) {
+	testcases := []struct {
+		name       string
+		rawTag     string
+		expName    string
+		expInject  map[string]string
+		expPrimary bool
+		expScope   string
+		expErr     error
+	}{
+		{
+			name:       "TestEmptyTag",
+			rawTag:     ``,
+			expName:    "",
+			expInject:  map[string]string{},
+			expPrimary: false,
+			expScope:   ScopeSingleton,
+			expErr:     nil,
+		},
+		{
+			name:       "TestBasicAttributes",
+			rawTag:     `flora:"primary, scope=prototype"`,
+			expName:    "",
+			expInject:  map[string]string{},
+			expPrimary: true,
+			expScope:   ScopePrototype,
+			expErr:     nil,
+		},
+		{
+			name:       "TestQualifierName",
+			rawTag:     `flora:"name=myCustomService"`,
+			expName:    "myCustomService",
+			expInject:  map[string]string{},
+			expPrimary: false,
+			expScope:   ScopeSingleton,
+			expErr:     nil,
+		},
+		{
+			name:       "TestSingleInject",
+			rawTag:     `flora:"inject(db=masterDB)"`,
+			expName:    "",
+			expInject:  map[string]string{"db": "masterDB"},
+			expPrimary: false,
+			expScope:   ScopeSingleton,
+			expErr:     nil,
+		},
+		{
+			name:       "TestMultipleInjectWithSpaces",
+			rawTag:     `flora:"inject( db = masterDB , logger= fileLogger )"`,
+			expName:    "",
+			expInject:  map[string]string{"db": "masterDB", "logger": "fileLogger"},
+			expPrimary: false,
+			expScope:   ScopeSingleton,
+			expErr:     nil,
+		},
+		{
+			name:       "TestComplexCombination",
+			rawTag:     `flora:"primary, name=myService, inject(db=masterDB, cache=redisCache), scope=prototype"`,
+			expName:    "myService",
+			expInject:  map[string]string{"db": "masterDB", "cache": "redisCache"},
+			expPrimary: true,
+			expScope:   ScopePrototype,
+			expErr:     nil,
+		},
+		{
+			name:       "TestInvalidInjectFormat",
+			rawTag:     `flora:"inject(db:masterDB)"`,
+			expName:    "",
+			expInject:  map[string]string{},
+			expPrimary: false,
+			expScope:   ScopeSingleton,
+			expErr:     ErrInvalidMetadata,
+		},
+		{
+			name:       "Empty Parts in Main Tag (Triggers continue)",
+			rawTag:     `flora:", primary, , name=myService, "`, // Extra Kommas am Anfang, Mitte und Ende
+			expName:    "myService",
+			expInject:  map[string]string{},
+			expPrimary: true,
+			expScope:   ScopeSingleton,
+			expErr:     nil,
+		},
+		{
+			name:       "Empty Parts in Inject Tag (Triggers continue)",
+			rawTag:     `flora:"inject(db=master, , cache=redis, )"`, // Extra Kommas innerhalb von inject()
+			expName:    "",
+			expInject:  map[string]string{"db": "master", "cache": "redis"},
+			expPrimary: false,
+			expScope:   ScopeSingleton,
+			expErr:     nil,
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			metadata := &engine.ComponentMetadata{
+				StructName: "TestStruct",
+			}
+
+			err := parseFloraTag(tc.rawTag, metadata)
+
+			if tc.expErr != nil {
+				if !errors.Is(err, tc.expErr) {
+					t.Errorf("expected error %v, got %v", tc.expErr, err)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if metadata.QualifierName != tc.expName {
+				t.Errorf("expected QualifierName '%s', got '%s'", tc.expName, metadata.QualifierName)
+			}
+			if metadata.IsPrimary != tc.expPrimary {
+				t.Errorf("expected IsPrimary %v, got %v", tc.expPrimary, metadata.IsPrimary)
+			}
+			if metadata.Scope != tc.expScope {
+				t.Errorf("expected Scope '%s', got '%s'", tc.expScope, metadata.Scope)
+			}
+			if !reflect.DeepEqual(metadata.InjectParams, tc.expInject) {
+				t.Errorf("expected InjectParams %v, got %v", tc.expInject, metadata.InjectParams)
+			}
+		})
+	}
 }

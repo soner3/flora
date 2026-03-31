@@ -448,6 +448,74 @@ func TestGenerate(t *testing.T) {
 			},
 			expErr: ErrWireExecution,
 		},
+		{
+			name: "TestGenerateCoverageGaps",
+			setupDir: func(t *testing.T) string {
+				tmpDir, _ := os.MkdirTemp(".", "flora_test_out_*")
+				return tmpDir
+			},
+			genCtx: &engine.GeneratorContext{
+				Components: []*engine.ComponentMetadata{
+					{
+						PackageName: "pkg", PackagePath: "pkg",
+						StructName: "SanitizeTest", ConstructorName: "NewSanitizeTest",
+						QualifierName: "my-weird@qualifier",
+					},
+					{
+						PackageName: "pkg", PackagePath: "pkg",
+						StructName: "ReqQualTest", ConstructorName: "NewReqQualTest",
+						QualifierName: "ReqQualTest",
+						Params: []engine.ParamMetadata{
+							{Name: "p1", Type: "string", RequestedQualifier: "my-weird@qualifier"},
+						},
+					},
+					{
+						PackageName: "pkg", PackagePath: "pkg",
+						StructName: "ProtoC", ConstructorName: "NewProtoC",
+						QualifierName: "ProtoC", Scope: "prototype",
+						HasCleanup: true, HasError: false,
+						Implements: []engine.InterfaceMetadata{{PackageName: "pkg", PackagePath: "pkg", InterfaceName: "IfaceC"}},
+					},
+					{
+						PackageName: "pkg", PackagePath: "pkg",
+						StructName: "ProtoE", ConstructorName: "NewProtoE",
+						QualifierName: "ProtoE", Scope: "prototype",
+						HasCleanup: false, HasError: true,
+						Implements: []engine.InterfaceMetadata{{PackageName: "pkg", PackagePath: "pkg", InterfaceName: "IfaceE"}},
+					},
+					{
+						PackageName: "pkg", PackagePath: "pkg",
+						StructName: "ProtoCE", ConstructorName: "NewProtoCE",
+						QualifierName: "ProtoCE", Scope: "prototype",
+						HasCleanup: true, HasError: true,
+						Implements: []engine.InterfaceMetadata{{PackageName: "pkg", PackagePath: "pkg", InterfaceName: "IfaceCE"}},
+					},
+					{
+						PackageName: "pkg", PackagePath: "pkg",
+						StructName: "SliceImpl", ConstructorName: "NewSliceImpl1",
+						QualifierName: "SliceImpl",
+					},
+					{
+						PackageName: "pkg", PackagePath: "pkg",
+						StructName: "SliceImpl", ConstructorName: "NewSliceImpl2",
+						QualifierName: "SliceImpl2",
+					},
+				},
+				SliceBindings: []*engine.SliceBindingMetadata{
+					{
+						Interface: engine.InterfaceMetadata{PackageName: "pkg", PackagePath: "pkg", InterfaceName: "SliceIface"},
+						Implementations: []*engine.ComponentMetadata{
+							{
+								PackageName: "pkg", PackagePath: "pkg",
+								StructName: "SliceImpl", ConstructorName: "NewSliceImpl1",
+								QualifierName: "SliceImpl",
+							},
+						},
+					},
+				},
+			},
+			expErr: ErrWireExecution,
+		},
 	}
 
 	for _, tc := range testcases {

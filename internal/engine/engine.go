@@ -22,9 +22,10 @@ type InterfaceMetadata struct {
 }
 
 type ParamMetadata struct {
-	Name    string
-	Type    string
-	Imports []string
+	Name               string
+	Type               string
+	Imports            []string
+	RequestedQualifier string
 }
 
 type ComponentMetadata struct {
@@ -42,6 +43,8 @@ type ComponentMetadata struct {
 	ConfigMethodName  string
 	ConfigPackageName string
 	ConfigPackagePath string
+	QualifierName     string
+	InjectParams      map[string]string
 	Implements        []InterfaceMetadata
 	Params            []ParamMetadata
 }

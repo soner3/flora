@@ -134,3 +134,11 @@ func (c AppConfig) ProvideCustomStruct() CustomStruct {
 func (c AppConfig) ProvidePointerStruct() *CustomStruct {
 	return &CustomStruct{}
 }
+
+type MyService struct {
+	flora.Component
+}
+
+func NewMyService(string, _ int) *MyService {
+	return nil
+}

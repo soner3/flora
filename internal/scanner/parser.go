@@ -120,6 +120,11 @@ func ParsePackages(pkgs []*packages.Package) (*engine.GeneratorContext, error) {
 		return nil, err
 	}
 
+	log.Debug("Validating requested qualifiers...")
+	if err := validateQualifiers(scannedComponents); err != nil {
+		return nil, err
+	}
+
 	var finalMetadata []*engine.ComponentMetadata
 	for _, comp := range scannedComponents {
 		finalMetadata = append(finalMetadata, comp.Metadata)
@@ -195,6 +200,7 @@ func parseFloraTag(rawTag string, metadata *engine.ComponentMetadata) error {
 	metadata.IsPrimary = false
 	metadata.Scope = ScopeSingleton
 	metadata.Order = math.MaxInt32
+	metadata.InjectParams = make(map[string]string)
 
 	if rawTag == "" {
 		return nil
@@ -207,8 +213,27 @@ func parseFloraTag(rawTag string, metadata *engine.ComponentMetadata) error {
 		return nil
 	}
 
-	parts := strings.SplitSeq(val, ",")
-	for part := range parts {
+	var parts []string
+	var current strings.Builder
+	depth := 0
+	for _, r := range val {
+		if r == '(' {
+			depth++
+		} else if r == ')' {
+			depth--
+		} else if r == ',' && depth == 0 {
+			parts = append(parts, strings.TrimSpace(current.String()))
+			current.Reset()
+			continue
+		}
+		current.WriteRune(r)
+	}
+
+	if current.Len() > 0 {
+		parts = append(parts, strings.TrimSpace(current.String()))
+	}
+
+	for _, part := range parts {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue
@@ -220,7 +245,6 @@ func parseFloraTag(rawTag string, metadata *engine.ComponentMetadata) error {
 			if metadata.ConfigStructName == "" {
 				metadata.ConstructorName = strings.TrimPrefix(part, "constructor=")
 			}
-
 			if err := isExported(metadata); err != nil {
 				return err
 			}
@@ -237,11 +261,26 @@ func parseFloraTag(rawTag string, metadata *engine.ComponentMetadata) error {
 				return errs.Wrap(ErrInvalidMetadata, "invalid order '%s' for component '%s' in package '%s' (must be an integer)", orderStr, metadata.StructName, metadata.PackageName)
 			}
 			metadata.Order = order
+		case strings.HasPrefix(part, "name="):
+			metadata.QualifierName = strings.TrimPrefix(part, "name=")
+		case strings.HasPrefix(part, "inject(") && strings.HasSuffix(part, ")"):
+			inner := part[len("inject(") : len(part)-1]
+			injectParts := strings.Split(inner, ",")
+			for _, ip := range injectParts {
+				ip = strings.TrimSpace(ip)
+				if ip == "" {
+					continue
+				}
+				kv := strings.SplitN(ip, "=", 2)
+				if len(kv) != 2 {
+					return errs.Wrap(ErrInvalidMetadata, "invalid inject format '%s' for component '%s' (expected param=qualifier)", ip, metadata.StructName)
+				}
+				metadata.InjectParams[strings.TrimSpace(kv[0])] = strings.TrimSpace(kv[1])
+			}
 		default:
 			if metadata.ConfigStructName == "" {
 				metadata.ConstructorName = part
 			}
-
 			if err := isExported(metadata); err != nil {
 				return err
 			}
@@ -388,6 +427,7 @@ func validateProviderFunc(compInfo *componentInfo, metadata *engine.ComponentMet
 	}
 
 	params := sig.Params()
+	validParamNames := make(map[string]bool)
 
 	for i := 0; i < params.Len(); i++ {
 		param := params.At(i)
@@ -416,11 +456,30 @@ func validateProviderFunc(compInfo *componentInfo, metadata *engine.ComponentMet
 
 		paramTypeStr := types.TypeString(paramType, qualifier)
 
+		pName := param.Name()
+		if pName == "" || pName == "_" {
+			pName = fmt.Sprintf("p%d", i)
+		}
+		validParamNames[pName] = true
+
+		reqQual := metadata.InjectParams[pName]
+
 		metadata.Params = append(metadata.Params, engine.ParamMetadata{
-			Name:    fmt.Sprintf("p%d", i),
-			Type:    paramTypeStr,
-			Imports: imports,
+			Name:               pName,
+			Type:               paramTypeStr,
+			Imports:            imports,
+			RequestedQualifier: reqQual,
 		})
+	}
+
+	for injectedParam := range metadata.InjectParams {
+		if !validParamNames[injectedParam] {
+			return nil, errs.Wrap(ErrInvalidMetadata, "You tried to inject qualifier into parameter '%s', but the function %s has no parameter named '%s'. Did you rename it?", injectedParam, metadata.ConstructorName, injectedParam)
+		}
+	}
+
+	if metadata.QualifierName == "" {
+		metadata.QualifierName = metadata.StructName
 	}
 
 	return sig, nil
@@ -674,6 +733,31 @@ func isExported(metadata *engine.ComponentMetadata) error {
 		}
 	} else {
 		return errs.Wrap(ErrInvalidMetadata, "invalid constructor '%s' for component '%s' in package '%s'", metadata.ConstructorName, metadata.StructName, metadata.PackageName)
+	}
+
+	return nil
+}
+
+// validateQualifiers checks if all requested qualifiers in inject(...) tags actually exist
+func validateQualifiers(components []*scannedComponent) error {
+	availableQualifiers := make(map[string]bool)
+	for _, comp := range components {
+		if comp.Metadata.QualifierName != "" {
+			availableQualifiers[comp.Metadata.QualifierName] = true
+		}
+	}
+
+	for _, comp := range components {
+		for _, param := range comp.Metadata.Params {
+			if param.RequestedQualifier != "" {
+				if !availableQualifiers[param.RequestedQualifier] {
+					return errs.Wrap(ErrInvalidMetadata, "component '%s' requests qualifier '%s' for parameter '%s', but no provider with this qualifier name exists",
+						comp.Metadata.StructName,
+						param.RequestedQualifier,
+						param.Name)
+				}
+			}
+		}
 	}
 
 	return nil
