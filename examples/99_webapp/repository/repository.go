@@ -30,21 +30,23 @@ type Book struct {
 
 // BookRepository handles database operations for books.
 type BookRepository struct {
-	flora.Component
-
-	db *sql.DB
+	flora.Component `flora:"inject(readDB=replicaDB, writeDB=masterDB)"`
+	master          *sql.DB
+	replica         *sql.DB
 }
 
-func NewBookRepository(db *sql.DB) *BookRepository {
-	fmt.Println("-> [Repo] BookRepository initialized")
+// NewBookRepository receives the Master and Replica databases seamlessly thanks to Flora.
+func NewBookRepository(writeDB *sql.DB, readDB *sql.DB) *BookRepository {
+	fmt.Println("-> [Repo] BookRepository initialized with Master & Replica DB")
 	return &BookRepository{
-		db: db,
+		master:  writeDB,
+		replica: readDB,
 	}
 }
 
-// GetAll fetches all books from the database
+// GetAll intentionally uses the REPLICA for reading!
 func (r *BookRepository) GetAll() ([]Book, error) {
-	rows, err := r.db.Query("SELECT id, title, author FROM books")
+	rows, err := r.replica.Query("SELECT id, title, author FROM books")
 	if err != nil {
 		return nil, err
 	}

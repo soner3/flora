@@ -309,7 +309,7 @@ func TestParseFloraTag(t *testing.T) {
 		},
 		{
 			name:       "Empty Parts in Main Tag (Triggers continue)",
-			rawTag:     `flora:", primary, , name=myService, "`, // Extra Kommas am Anfang, Mitte und Ende
+			rawTag:     `flora:", primary, , name=myService, "`,
 			expName:    "myService",
 			expInject:  map[string]string{},
 			expPrimary: true,
@@ -318,7 +318,7 @@ func TestParseFloraTag(t *testing.T) {
 		},
 		{
 			name:       "Empty Parts in Inject Tag (Triggers continue)",
-			rawTag:     `flora:"inject(db=master, , cache=redis, )"`, // Extra Kommas innerhalb von inject()
+			rawTag:     `flora:"inject(db=master, , cache=redis, )"`,
 			expName:    "",
 			expInject:  map[string]string{"db": "master", "cache": "redis"},
 			expPrimary: false,

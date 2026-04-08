@@ -4,12 +4,12 @@ This example demonstrates how to build a fully-structured, production-ready Go w
 
 ## The Concept
 This tutorial showcases how Flora orchestrates a complex dependency graph without any manual wiring:
-* **Infrastructure (`@Configuration`)**: Connects to a SQLite database and provides the `*sql.DB` connection with a graceful shutdown cleanup function.
-* **Repository & Service (`@Component`)**: Implements the data layer and business logic. The service depends on the repository via an **Interface**, completely decoupling the layers.
-* **Middlewares (Slice Injection)**: Uses Flora's `// flora:order=X` feature to automatically inject and sort a slice of pure Go middlewares (like Logger and Auth). The Auth middleware even receives the database repository via Dependency Injection!
-* **Controllers (Slice Injection)**: Automatically discovers all HTTP handlers implementing the `Controller` interface and registers them to the `chi.Router`.
+* **Master & Replica Database (`@Configuration`)**: Connects to two separate SQLite instances (Master for writes, Replica for reads) and returns two identical types (`*sql.DB`) safely resolved via **Qualifiers**.
+* **Repository & Service (`@Component`)**: Implements the data layer. The repository consumes both Master and Replica DBs using the `flora:"inject(...)"` tag. The service depends on the repository via an **Interface**, decoupling the layers.
+* **Middlewares (Slice Injection)**: Uses Flora's `// flora:order=X` feature to automatically inject and sort a slice of pure Go middlewares (like Logger and Auth). 
+* **Controllers (Slice Injection)**: Automatically discovers all HTTP handlers implementing the `Controller` interface and registers them to the router.
 
-With Flora, adding a new endpoint or middleware is as simple as creating a new struct with `flora.Component` – no need to ever touch the routing configuration again!
+With Flora, adding a new endpoint or middleware is as simple as creating a new struct with `flora.Component` - no need to ever touch the routing configuration again!
 
 ## How to run
 

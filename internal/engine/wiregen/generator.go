@@ -93,12 +93,10 @@ import (
     {{end}}
 )
 
-// --- 1. Type Aliases for Qualifiers ---
 {{range .Aliases}}
 type {{.AliasName}} {{.OriginalType}}
 {{end}}
 
-// --- 2. Wrappers for Components and Configurations ---
 {{range .Wrappers}}
 {{if .IsPrototype}}
 func {{.WrapperName}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{{$param.Name}} {{$param.Type}}{{end}}) func() ({{.ReturnType}}{{if .HasCleanup}}, func(){{end}}{{if .HasError}}, error{{end}}) {
@@ -145,14 +143,12 @@ func {{.WrapperName}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{
 {{end}}
 {{end}}
 
-// --- 3. Interface Bindings (Resolves aliases losing methods) ---
 {{range .Bindings}}
 func {{.WrapperName}}(val {{.ParamType}}) {{.InterfaceType}} {
     return ({{.OriginalType}})(val)
 }
 {{end}}
 
-// --- 3b. Prototype Interface Bindings ---
 {{range .PrototypeBindings}}
 func {{.WrapperName}}(factory {{.ParamType}}) func() ({{.InterfaceType}}{{if .HasCleanup}}, func(){{end}}{{if .HasError}}, error{{end}}) {
     return func() ({{.InterfaceType}}{{if .HasCleanup}}, func(){{end}}{{if .HasError}}, error{{end}}) {
@@ -172,7 +168,6 @@ func {{.WrapperName}}(factory {{.ParamType}}) func() ({{.InterfaceType}}{{if .Ha
 }
 {{end}}
 
-// --- 4. Slice Bindings ---
 {{range .SliceBindings}}
 func ProvideSliceOf{{.InterfaceName}}({{range $index, $impl := .Implementations}}{{if $index}}, {{end}}{{$impl.ParamName}} {{$impl.ParamType}}{{end}}) []{{.InterfaceType}} {
     return []{{.InterfaceType}}{
@@ -181,7 +176,6 @@ func ProvideSliceOf{{.InterfaceName}}({{range $index, $impl := .Implementations}
 }
 {{end}}
 
-// --- 5. Primary Aliases (Fallback for standard injection) ---
 {{range .PrimaryAliases}}
 func ProvidePrimary_{{.AliasName}}(val {{.AliasName}}) {{.OriginalType}} {
     return ({{.OriginalType}})(val)
@@ -250,7 +244,6 @@ type bindingData struct {
 	InterfaceType string
 }
 
-// NEU: Diese Struct hat vorhin gefehlt!
 type prototypeBindingData struct {
 	WrapperName   string
 	ParamType     string
@@ -285,7 +278,6 @@ type providerData struct {
 	Call string
 }
 
-// NEU: PrototypeBindings wurde hier hinzugefügt!
 type templateData struct {
 	PackageName       string
 	Imports           []string
@@ -361,7 +353,6 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 		return pType
 	}
 
-	// Pass 1: Count types & collect requested qualifiers
 	for _, comp := range genCtx.Components {
 		retType := formatType(comp.PackageName, comp.PackagePath, comp.StructName, comp.IsPointer)
 		typeCount[retType]++
@@ -378,7 +369,7 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 
 	var wrappers []wrapperData
 	var bindings []bindingData
-	var prototypeBindings []prototypeBindingData // NEU: Array für die Prototype-Bindings
+	var prototypeBindings []prototypeBindingData
 	var primaryAliases []primaryAliasData
 	var providers []providerData
 	var fields []containerField
@@ -483,7 +474,6 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 			}
 
 			if isPrototype {
-				// Logik für Factory-Interfaces!
 				retSig := finalReturnType
 				if comp.HasCleanup && comp.HasError {
 					retSig += ", func(), error"
@@ -504,7 +494,6 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 				})
 
 			} else {
-				// Normale Singleton Interfaces
 				bWrapperName := fmt.Sprintf("ProvideBinding_%s_As_%s", sanitize(comp.QualifierName), sanitize(iface.InterfaceName))
 				bindings = append(bindings, bindingData{
 					WrapperName:   bWrapperName,
@@ -594,7 +583,7 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 		Aliases:           aliases,
 		Wrappers:          wrappers,
 		Bindings:          bindings,
-		PrototypeBindings: prototypeBindings, // NEU: Eingefügt!
+		PrototypeBindings: prototypeBindings,
 		SliceBindings:     sliceBindingsData,
 		PrimaryAliases:    primaryAliases,
 		Providers:         providers,

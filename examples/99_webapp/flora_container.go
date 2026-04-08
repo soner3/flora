@@ -21,11 +21,16 @@ import (
 
 func InitializeContainer() (*FloraContainer, func(), error) {
 	appConfig := config.NewAppConfig()
-	db, cleanup, err := ProvideWrapper_DBConfig_ProvideDatabase(appConfig)
+	floraQualifier_masterDB, cleanup, err := ProvideWrapper_DBConfig_ProvideMasterDB(appConfig)
 	if err != nil {
 		return nil, nil, err
 	}
-	bookRepository := repository.NewBookRepository(db)
+	floraQualifier_replicaDB, cleanup2, err := ProvideWrapper_DBConfig_ProvideReplicaDB(appConfig)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	bookRepository := ProvideWrapper_NewBookRepository(floraQualifier_masterDB, floraQualifier_replicaDB)
 	serviceBookRepository := ProvideBinding_BookRepository_As_BookRepository(bookRepository)
 	bookService := service.ProvideBookService(serviceBookRepository)
 	bookHandler := controller.NewBookHandler(bookService)
@@ -35,8 +40,9 @@ func InitializeContainer() (*FloraContainer, func(), error) {
 	v := ProvideSliceOfController(bookHandler, helloHandler)
 	v2 := ProvideSliceOfMiddleware(floraAlias_Provide_MiddlewareConfig_ProvideLogger, floraAlias_Provide_MiddlewareConfig_ProvideAuth)
 	handler := ProvideWrapper_WebConfig_ProvideRouter(v, v2)
-	server, cleanup2, err := ProvideWrapper_WebConfig_ProvideServer(appConfig, handler)
+	server, cleanup3, err := ProvideWrapper_WebConfig_ProvideServer(appConfig, handler, floraQualifier_masterDB)
 	if err != nil {
+		cleanup2()
 		cleanup()
 		return nil, nil, err
 	}
@@ -46,13 +52,15 @@ func InitializeContainer() (*FloraContainer, func(), error) {
 		BookService:                            bookService,
 		BookHandler:                            bookHandler,
 		HelloHandler:                           helloHandler,
-		DB:                                     db,
 		Provide_MiddlewareConfig_ProvideLogger: floraAlias_Provide_MiddlewareConfig_ProvideLogger,
 		Provide_MiddlewareConfig_ProvideAuth:   floraAlias_Provide_MiddlewareConfig_ProvideAuth,
 		Handler:                                handler,
 		Server:                                 server,
+		Provide_DBConfig_ProvideMasterDB:       floraQualifier_masterDB,
+		Provide_DBConfig_ProvideReplicaDB:      floraQualifier_replicaDB,
 	}
 	return floraContainer, func() {
+		cleanup3()
 		cleanup2()
 		cleanup()
 	}, nil
@@ -64,13 +72,15 @@ type FloraAlias_Provide_MiddlewareConfig_ProvideAuth middleware.Middleware
 
 type FloraAlias_Provide_MiddlewareConfig_ProvideLogger middleware.Middleware
 
-func ProvideWrapper_DBConfig_ProvideDatabase(cfg *config.AppConfig) (*sql.DB, func(), error) {
+type FloraQualifier_masterDB *sql.DB
 
-	flora_cfg_struct := infrastructure.DBConfig{}
+type FloraQualifier_replicaDB *sql.DB
 
-	val, cleanup, err := flora_cfg_struct.ProvideDatabase(cfg)
+func ProvideWrapper_NewBookRepository(writeDB FloraQualifier_masterDB, readDB FloraQualifier_replicaDB) *repository.BookRepository {
 
-	return val, cleanup, err
+	val := repository.NewBookRepository((*sql.DB)(writeDB), (*sql.DB)(readDB))
+
+	return val
 
 }
 
@@ -94,23 +104,43 @@ func ProvideWrapper_MiddlewareConfig_ProvideAuth(repo *repository.BookRepository
 
 }
 
-func ProvideWrapper_WebConfig_ProvideRouter(controllers []controller.Controller, middleware2 []middleware.Middleware) http.Handler {
+func ProvideWrapper_WebConfig_ProvideRouter(controllers []controller.Controller, middlewares []middleware.Middleware) http.Handler {
 
 	flora_cfg_struct := WebConfig{}
 
-	val := flora_cfg_struct.ProvideRouter(controllers, middleware2)
+	val := flora_cfg_struct.ProvideRouter(controllers, middlewares)
 
 	return val
 
 }
 
-func ProvideWrapper_WebConfig_ProvideServer(cfg *config.AppConfig, handler http.Handler) (*http.Server, func(), error) {
+func ProvideWrapper_WebConfig_ProvideServer(cfg *config.AppConfig, handler http.Handler, startupDB FloraQualifier_masterDB) (*http.Server, func(), error) {
 
 	flora_cfg_struct := WebConfig{}
 
-	val, cleanup, err := flora_cfg_struct.ProvideServer(cfg, handler)
+	val, cleanup, err := flora_cfg_struct.ProvideServer(cfg, handler, (*sql.DB)(startupDB))
 
 	return val, cleanup, err
+
+}
+
+func ProvideWrapper_DBConfig_ProvideMasterDB(cfg *config.AppConfig) (FloraQualifier_masterDB, func(), error) {
+
+	flora_cfg_struct := infrastructure.DBConfig{}
+
+	val, cleanup, err := flora_cfg_struct.ProvideMasterDB(cfg)
+
+	return FloraQualifier_masterDB(val), cleanup, err
+
+}
+
+func ProvideWrapper_DBConfig_ProvideReplicaDB(cfg *config.AppConfig) (FloraQualifier_replicaDB, func(), error) {
+
+	flora_cfg_struct := infrastructure.DBConfig{}
+
+	val, cleanup, err := flora_cfg_struct.ProvideReplicaDB(cfg)
+
+	return FloraQualifier_replicaDB(val), cleanup, err
 
 }
 
@@ -141,8 +171,6 @@ type FloraContainer struct {
 
 	HelloHandler *controller.HelloHandler
 
-	DB *sql.DB
-
 	Provide_MiddlewareConfig_ProvideLogger FloraAlias_Provide_MiddlewareConfig_ProvideLogger
 
 	Provide_MiddlewareConfig_ProvideAuth FloraAlias_Provide_MiddlewareConfig_ProvideAuth
@@ -150,4 +178,8 @@ type FloraContainer struct {
 	Handler http.Handler
 
 	Server *http.Server
+
+	Provide_DBConfig_ProvideMasterDB FloraQualifier_masterDB
+
+	Provide_DBConfig_ProvideReplicaDB FloraQualifier_replicaDB
 }
