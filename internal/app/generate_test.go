@@ -16,8 +16,14 @@ limitations under the License.
 package app
 
 import (
+	"context"
+	"errors"
 	"os"
+	"path/filepath"
 	"testing"
+	"time"
+
+	"github.com/fsnotify/fsnotify"
 )
 
 func TestRunGenerate(t *testing.T) {
@@ -82,6 +88,192 @@ func TestRunGenerate(t *testing.T) {
 				if err != nil {
 					t.Errorf("did not expect an error, but got: %v", err)
 				}
+			}
+		})
+	}
+}
+
+func TestRunWatch_Success(t *testing.T) {
+
+	watchDir := t.TempDir()
+	outDir := t.TempDir()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	errCh := make(chan error, 1)
+
+	_ = os.WriteFile(filepath.Join(watchDir, "dummy_file.txt"), []byte(""), 0644)
+	_ = os.Mkdir(filepath.Join(watchDir, ".hidden_folder"), 0755)
+
+	go func() {
+		errCh <- RunWatch(ctx, "./testdata/happy", outDir, watchDir)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	_ = os.WriteFile(filepath.Join(watchDir, "ignored.txt"), []byte("text"), 0644)
+	_ = os.WriteFile(filepath.Join(watchDir, "flora_container.go"), []byte("package main"), 0644)
+
+	dummyFile := filepath.Join(watchDir, "trigger.go")
+	_ = os.WriteFile(dummyFile, []byte("package trigger\n"), 0644)
+
+	time.Sleep(400 * time.Millisecond)
+
+	cancel()
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Errorf("RunWatch returned unexpected error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("RunWatch did not shut down in time. Goroutine or WaitGroup deadlock!")
+	}
+}
+
+func TestRunWatch_InvalidDir(t *testing.T) {
+	ctx := context.Background()
+	err := RunWatch(ctx, "./testdata/happy", t.TempDir(), "invalid\x00path")
+	if err == nil {
+		t.Error("Expected an error for invalid watch directory, but got nil")
+	}
+}
+
+func TestRunWatch_WalkError(t *testing.T) {
+	ctx := context.Background()
+	watchDir := t.TempDir()
+
+	noPermDir := filepath.Join(watchDir, "noperm")
+	os.Mkdir(noPermDir, 0755)
+	os.Chmod(noPermDir, 0000)
+
+	defer os.Chmod(noPermDir, 0755)
+
+	err := RunWatch(ctx, ".", ".", watchDir)
+	if err == nil {
+		t.Error("Expected an error because directory is unreadable")
+	}
+}
+
+func TestRunWatch_AbsError(t *testing.T) {
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+
+	originalWd, _ := os.Getwd()
+	defer os.Chdir(originalWd)
+
+	os.Chdir(tmpDir)
+	os.RemoveAll(tmpDir)
+
+	err := RunWatch(ctx, ".", ".", ".")
+	if err == nil {
+		t.Error("Expected an error for filepath.Abs")
+	}
+}
+
+func TestRunWatch_WatcherError(t *testing.T) {
+	originalWatcherFunc := newWatcherFunc
+	newWatcherFunc = func() (FileWatcher, error) {
+		return nil, errors.New("mocked watcher init error")
+	}
+	defer func() { newWatcherFunc = originalWatcherFunc }()
+
+	err := RunWatch(context.Background(), ".", ".", t.TempDir())
+	if err == nil {
+		t.Error("Expected an error from NewWatcher")
+	}
+}
+
+func TestNewWatcherFunc_Error(t *testing.T) {
+	originalNewWatcher := newWatcher
+
+	defer func() { newWatcher = originalNewWatcher }()
+
+	newWatcher = func() (*fsnotify.Watcher, error) {
+		return nil, errors.New("simulated OS out of file descriptors")
+	}
+	watcher, err := newWatcherFunc()
+	if err == nil {
+		t.Error("Expected an error from newWatcherFunc because osNewWatcher failed, but got nil")
+	}
+	if watcher != nil {
+		t.Error("Expected watcher to be nil when an error occurs")
+	}
+}
+
+type mockWatcher struct {
+	eventsChan chan fsnotify.Event
+	errorsChan chan error
+}
+
+func (m *mockWatcher) Add(name string) error         { return nil }
+func (m *mockWatcher) Close() error                  { return nil }
+func (m *mockWatcher) Events() <-chan fsnotify.Event { return m.eventsChan }
+func (m *mockWatcher) Errors() <-chan error          { return m.errorsChan }
+
+func TestRunWatch_MockedChannels(t *testing.T) {
+
+	testcases := []struct {
+		name       string
+		actionFunc func(events chan fsnotify.Event, errs chan error)
+	}{
+		{
+			name: "TestEventsChannelClosed",
+			actionFunc: func(events chan fsnotify.Event, errs chan error) {
+				close(events)
+			},
+		},
+		{
+			name: "TestErrorsChannelClosed",
+			actionFunc: func(events chan fsnotify.Event, errs chan error) {
+				close(errs)
+			},
+		},
+		{
+			name: "TestWatcherErrorReceived",
+			actionFunc: func(events chan fsnotify.Event, errs chan error) {
+				err := errors.New("simulated watcher error")
+				errs <- err
+				close(errs)
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			eventsCh := make(chan fsnotify.Event)
+			errorsCh := make(chan error)
+
+			originalWatcherFunc := newWatcherFunc
+			newWatcherFunc = func() (FileWatcher, error) {
+				return &mockWatcher{
+					eventsChan: eventsCh,
+					errorsChan: errorsCh,
+				}, nil
+			}
+			defer func() { newWatcherFunc = originalWatcherFunc }()
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			errCh := make(chan error, 1)
+
+			go func() {
+				errCh <- RunWatch(ctx, ".", ".", t.TempDir())
+			}()
+
+			time.Sleep(50 * time.Millisecond)
+
+			tc.actionFunc(eventsCh, errorsCh)
+
+			select {
+			case err := <-errCh:
+				if err != nil {
+					t.Errorf("expected RunWatch to exit with nil, got: %v", err)
+				}
+			case <-time.After(1 * time.Second):
+				t.Fatalf("RunWatch deadlock! Did not exit after channel action.")
 			}
 		})
 	}

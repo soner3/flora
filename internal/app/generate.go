@@ -16,11 +16,45 @@ limitations under the License.
 package app
 
 import (
+	"context"
 	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/soner3/flora/internal/engine/wiregen"
+	"github.com/soner3/flora/internal/errs"
 	"github.com/soner3/flora/internal/scanner"
 )
+
+type FileWatcher interface {
+	Add(name string) error
+	Close() error
+	Events() <-chan fsnotify.Event
+	Errors() <-chan error
+}
+
+type realWatcher struct {
+	w *fsnotify.Watcher
+}
+
+func (rw *realWatcher) Add(name string) error         { return rw.w.Add(name) }
+func (rw *realWatcher) Close() error                  { return rw.w.Close() }
+func (rw *realWatcher) Events() <-chan fsnotify.Event { return rw.w.Events }
+func (rw *realWatcher) Errors() <-chan error          { return rw.w.Errors }
+
+var newWatcher = fsnotify.NewWatcher
+
+var newWatcherFunc = func() (FileWatcher, error) {
+	w, err := newWatcher()
+	if err != nil {
+		return nil, err
+	}
+	return &realWatcher{w: w}, nil
+}
 
 func RunGenerate(inputDir, outputDir string) error {
 	log := slog.With("pkg", "app")
@@ -53,4 +87,88 @@ func RunGenerate(inputDir, outputDir string) error {
 
 	log.Info("Successfully generated flora container!")
 	return nil
+}
+
+// RunWatch starts a file watcher in the specified directory and triggers RunGenerate on changes.
+func RunWatch(ctx context.Context, inputDir, outputDir, watchDir string) error {
+	log := slog.With("pkg", "app")
+
+	absWatchDir, err := filepath.Abs(watchDir)
+	if err != nil {
+		return errs.Wrap(err, "failed to resolve absolute path for watch directory")
+	}
+
+	watcher, err := newWatcherFunc()
+	if err != nil {
+		return errs.Wrap(err, "failed to initialize file watcher")
+	}
+	defer watcher.Close()
+
+	err = filepath.Walk(absWatchDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			if strings.HasPrefix(info.Name(), ".") && info.Name() != "." {
+				return filepath.SkipDir
+			}
+			return watcher.Add(path)
+		}
+		return nil
+	})
+
+	if err != nil {
+		return errs.Wrap(err, "failed to scan directory for watching: %s", absWatchDir)
+	}
+
+	log.Info("Flora Watch Mode started", "watch_dir", absWatchDir)
+
+	if err := RunGenerate(inputDir, outputDir); err != nil {
+		log.Error("Initial generation failed", "error", err)
+	}
+
+	var timer *time.Timer
+	debounceDuration := 300 * time.Millisecond
+
+	var genWg sync.WaitGroup
+
+	for {
+		select {
+		case <-ctx.Done():
+			if timer != nil {
+				timer.Stop()
+			}
+			genWg.Wait()
+			return nil
+
+		case event, ok := <-watcher.Events():
+			if !ok {
+				return nil
+			}
+
+			if !strings.HasSuffix(event.Name, ".go") || strings.HasSuffix(event.Name, "flora_container.go") || strings.HasSuffix(event.Name, "flora_injector.go") {
+				continue
+			}
+
+			if timer != nil {
+				timer.Stop()
+			}
+
+			timer = time.AfterFunc(debounceDuration, func() {
+				genWg.Add(1)
+				defer genWg.Done()
+
+				log.Info("File change detected. Regenerating...", "file", filepath.Base(event.Name))
+				if err := RunGenerate(inputDir, outputDir); err != nil {
+					log.Error("Generation failed", "error", err)
+				}
+			})
+
+		case err, ok := <-watcher.Errors():
+			if !ok {
+				return nil
+			}
+			log.Error("Watcher encountered an error", "error", err)
+		}
+	}
 }

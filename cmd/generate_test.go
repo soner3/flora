@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestGenerateCmd(t *testing.T) {
@@ -22,19 +24,43 @@ func TestGenerateCmd(t *testing.T) {
 			expErr:      true,
 		},
 		{
-			name:        "TestInvalidOutputDirectory",
+			name:        "TestInvalidInputDirectoryNotADirectory",
 			args:        []string{"gen", "-i", "./root.go"},
 			expectedOut: "invalid path provided for flag 'input':",
 			expErr:      true,
 		},
 		{
-			name:        "TestSuccess",
+			name:        "TestInvalidOutputDirectory",
+			args:        []string{"gen", "-i", "./testdata/generate/happy", "-o", "./invalid"},
+			expectedOut: "invalid directory provided for flag 'output':",
+			expErr:      true,
+		},
+		{
+			name:        "TestInvalidOutputDirectoryNotADirectory",
+			args:        []string{"gen", "-i", "./testdata/generate/happy", "-o", "./root.go"},
+			expectedOut: "invalid path provided for flag 'output':",
+			expErr:      true,
+		},
+		{
+			name:        "TestInvalidWatchDirectory",
+			args:        []string{"gen", "-i", "./testdata/generate/happy", "-o", "./testdata/generate/happy", "-w", "-d", "./invalid"},
+			expectedOut: "invalid directory provided for flag 'watch-dir':",
+			expErr:      true,
+		},
+		{
+			name:        "TestInvalidWatchDirectoryNotADirectory",
+			args:        []string{"gen", "-i", "./testdata/generate/happy", "-o", "./testdata/generate/happy", "-w", "-d", "./root.go"},
+			expectedOut: "invalid path provided for flag 'watch-dir':",
+			expErr:      true,
+		},
+		{
+			name:        "TestRunGenerateSuccess",
 			args:        []string{"gen", "-i", "./testdata/generate/happy", "-o", "./testdata/generate/happy"},
 			expectedOut: "Successfully generated flora container!",
 			cleanup: func() {
 				err := os.Remove("./testdata/generate/happy/flora_container.go")
-				if err != nil {
-					t.Fatalf("expected no error deleting generated file, got %v", err)
+				if err != nil && !os.IsNotExist(err) {
+					t.Errorf("expected no error deleting generated file, got %v", err)
 				}
 			},
 			expErr: false,
@@ -43,6 +69,16 @@ func TestGenerateCmd(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
+			inputDir = "."
+			outputDir = "flora"
+			watch = false
+			watchDir = "."
+
+			generateCmd.Flags().Set("input", ".")
+			generateCmd.Flags().Set("output", "flora")
+			generateCmd.Flags().Set("watch", "false")
+			generateCmd.Flags().Set("watch-dir", ".")
+
 			b := new(bytes.Buffer)
 			rootCmd.SetOut(b)
 			rootCmd.SetErr(b)
@@ -69,5 +105,44 @@ func TestGenerateCmd(t *testing.T) {
 				t.Fatalf("expected output to contain %q, got %q", tc.expectedOut, b.String())
 			}
 		})
+	}
+}
+
+func TestGenerateCmd_WatchModeShutdown(t *testing.T) {
+	inputDir = "."
+	outputDir = "flora"
+	watch = false
+	watchDir = "."
+
+	generateCmd.Flags().Set("input", ".")
+	generateCmd.Flags().Set("output", "flora")
+	generateCmd.Flags().Set("watch", "false")
+	generateCmd.Flags().Set("watch-dir", ".")
+
+	inDirTmp := t.TempDir()
+	outDirTmp := t.TempDir()
+	watchDirTmp := t.TempDir()
+
+	generateCmd.Flags().Set("input", inDirTmp)
+	generateCmd.Flags().Set("output", outDirTmp)
+	generateCmd.Flags().Set("watch", "true")
+	generateCmd.Flags().Set("watch-dir", watchDirTmp)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	errCh := make(chan error, 1)
+
+	go func() {
+		errCh <- generateCmd.ExecuteContext(ctx)
+	}()
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Errorf("Expected graceful shutdown without error, but got: %v", err)
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("Command did not shut down in time! Context cancellation was ignored.")
 	}
 }
