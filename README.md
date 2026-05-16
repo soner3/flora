@@ -61,7 +61,7 @@ Instead of maintaining huge initialization scripts, you define dependencies decl
 ```go
 package main
 
-import "[github.com/soner3/flora](https://github.com/soner3/flora)"
+import "github.com/soner3/flora"
 
 // 1. Mark your struct as a component
 type Greeter struct {
@@ -138,7 +138,7 @@ package config
 
 import (
     "database/sql"
-    "[github.com/soner3/flora](https://github.com/soner3/flora)"
+    "github.com/soner3/flora"
 )
 
 type DatabaseConfig struct {
@@ -183,7 +183,7 @@ In Hexagonal or Clean Architecture, your core domain should not have direct depe
 ```go
 package domain
 
-import "[github.com/soner3/flora](https://github.com/soner3/flora)"
+import "github.com/soner3/flora"
 
 // 1. Define a neutral alias in your domain layer
 type DIComponent = flora.Component
