@@ -20,6 +20,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"runtime/debug"
 	"strings"
 
 	"github.com/soner3/flora/internal/errs"
@@ -34,6 +35,7 @@ var (
 )
 
 var osExit = os.Exit
+var readBuildInfoFunc = debug.ReadBuildInfo
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -68,6 +70,8 @@ func Execute() {
 }
 
 func init() {
+	setupBuildInfo()
+
 	rootCmd.SetVersionTemplate("Flora version {{.Version}}\n")
 	rootCmd.PersistentFlags().StringVarP(&logLevel, "log-level", "l", "info", "Log level (debug, info, warn, error)")
 }
@@ -100,5 +104,30 @@ func setupLogger(cmd *cobra.Command) {
 
 	if invalidLevel {
 		slog.Warn("Invalid log level provided. Defaulting to 'info'.", "provided", logLevel)
+	}
+}
+
+func setupBuildInfo() {
+	if Build == "unknown" {
+		if info, ok := readBuildInfoFunc(); ok && info != nil {
+
+			if info.Main.Version != "" && info.Main.Version != "(devel)" {
+				Version = info.Main.Version
+			}
+
+			for _, setting := range info.Settings {
+				if setting.Key == "vcs.revision" {
+					if len(setting.Value) >= 7 {
+						Build = setting.Value[:7]
+					} else {
+						Build = setting.Value
+					}
+				}
+
+				if setting.Key == "vcs.modified" && setting.Value == "true" {
+					Build += "-dirty"
+				}
+			}
+		}
 	}
 }

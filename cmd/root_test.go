@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"runtime/debug"
 	"strings"
 	"testing"
 
@@ -75,6 +76,107 @@ func TestSetupLogger(t *testing.T) {
 		t.Run("Level_"+level, func(t *testing.T) {
 			logLevel = level
 			setupLogger(rootCmd)
+		})
+	}
+}
+
+func TestSetupBuildInfo(t *testing.T) {
+	// 1. Globale Variablen am Ende des Tests wiederherstellen (damit andere Tests nicht kaputt gehen)
+	origReadFunc := readBuildInfoFunc
+	origVersion := Version
+	origBuild := Build
+	defer func() {
+		readBuildInfoFunc = origReadFunc
+		Version = origVersion
+		Build = origBuild
+	}()
+
+	testcases := []struct {
+		name            string
+		initialVersion  string
+		initialBuild    string
+		mockReadFunc    func() (*debug.BuildInfo, bool)
+		expectedVersion string
+		expectedBuild   string
+	}{
+		{
+			name:           "GoReleaser Already Set",
+			initialVersion: "v1.0.0",
+			initialBuild:   "abcdef1",
+			mockReadFunc: func() (*debug.BuildInfo, bool) {
+				return nil, false
+			},
+			expectedVersion: "v1.0.0",
+			expectedBuild:   "abcdef1",
+		},
+		{
+			name:           "ReadBuildInfo Fails",
+			initialVersion: "dev",
+			initialBuild:   "unknown",
+			mockReadFunc: func() (*debug.BuildInfo, bool) {
+				return nil, false
+			},
+			expectedVersion: "dev",
+			expectedBuild:   "unknown",
+		},
+		{
+			name:           "Version is (devel)",
+			initialVersion: "dev",
+			initialBuild:   "unknown",
+			mockReadFunc: func() (*debug.BuildInfo, bool) {
+				return &debug.BuildInfo{
+					Main: debug.Module{Version: "(devel)"},
+				}, true
+			},
+			expectedVersion: "dev",
+			expectedBuild:   "unknown",
+		},
+		{
+			name:           "Happy Path - Long Revision & Clean",
+			initialVersion: "dev",
+			initialBuild:   "unknown",
+			mockReadFunc: func() (*debug.BuildInfo, bool) {
+				return &debug.BuildInfo{
+					Main: debug.Module{Version: "v1.2.3"},
+					Settings: []debug.BuildSetting{
+						{Key: "vcs.revision", Value: "1234567890abcdef"},
+					},
+				}, true
+			},
+			expectedVersion: "v1.2.3",
+			expectedBuild:   "1234567",
+		},
+		{
+			name:           "Happy Path - Short Revision & Dirty",
+			initialVersion: "dev",
+			initialBuild:   "unknown",
+			mockReadFunc: func() (*debug.BuildInfo, bool) {
+				return &debug.BuildInfo{
+					Main: debug.Module{Version: "v2.0.0"},
+					Settings: []debug.BuildSetting{
+						{Key: "vcs.revision", Value: "abc"},
+						{Key: "vcs.modified", Value: "true"},
+					},
+				}, true
+			},
+			expectedVersion: "v2.0.0",
+			expectedBuild:   "abc-dirty",
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			Version = tc.initialVersion
+			Build = tc.initialBuild
+			readBuildInfoFunc = tc.mockReadFunc
+			setupBuildInfo()
+
+			if Version != tc.expectedVersion {
+				t.Errorf("Expected Version %q, but got %q", tc.expectedVersion, Version)
+			}
+			if Build != tc.expectedBuild {
+				t.Errorf("Expected Build %q, but got %q", tc.expectedBuild, Build)
+			}
 		})
 	}
 }

@@ -142,19 +142,31 @@ func RunWatch(ctx context.Context, inputDir, outputDir, watchDir string) error {
 			return nil
 
 		case event, ok := <-watcher.Events():
+			log.Debug("File event received", "event", event, "ok", ok)
 			if !ok {
+				log.Debug("Events channel closed, exiting")
 				return nil
 			}
 
-			if !strings.HasSuffix(event.Name, ".go") || strings.HasSuffix(event.Name, "flora_container.go") || strings.HasSuffix(event.Name, "flora_injector.go") {
+			baseName := filepath.Base(event.Name)
+
+			if event.Op == fsnotify.Chmod ||
+				!strings.HasSuffix(event.Name, ".go") ||
+				baseName == "flora_container.go" ||
+				baseName == "flora_injector.go" ||
+				baseName == "wire_gen.go" ||
+				baseName == "wire.go" {
+				log.Debug("File event not relevant, skipping", "event", event)
 				continue
 			}
 
 			if timer != nil {
+				log.Debug("Debounce timer already active, stopping it", "event", event)
 				timer.Stop()
 			}
 
 			timer = time.AfterFunc(debounceDuration, func() {
+				log.Debug("Debounce timer expired, starting generation")
 				genWg.Add(1)
 				defer genWg.Done()
 
@@ -166,6 +178,7 @@ func RunWatch(ctx context.Context, inputDir, outputDir, watchDir string) error {
 
 		case err, ok := <-watcher.Errors():
 			if !ok {
+				log.Debug("Error channel closed, exiting")
 				return nil
 			}
 			log.Error("Watcher encountered an error", "error", err)

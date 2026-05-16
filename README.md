@@ -26,16 +26,16 @@
 Dependency Injection in Go traditionally forces developers to choose between two painful extremes:
 
 1. **Manual Wiring (Boilerplate):** You manually construct the dependency graph or maintain massive `ProviderSets` (e.g., in Google Wire). As your application scales to dozens of services, wiring becomes a tedious, unmaintainable chore.
-2. **Reflection (Runtime Magic):** You use dynamic frameworks that resolve dependencies at runtime. This causes slower startup times, circumvents Go's strict compiler, and worst of all: missing dependencies cause your application to panic *at runtime* instead of failing during compilation.
+2. **Reflection (Runtime Magic):** You use dynamic frameworks that resolve dependencies at runtime. This causes slower startup times, circumvents Go's strict compiler, and worst of all: missing dependencies cause your application to panic _at runtime_ instead of failing during compilation.
 
 Flora solves this by acting as a "Convention over Configuration" layer. It parses your source code's Abstract Syntax Tree (AST) to natively discover your components, and then automatically generates a strongly-typed DI container using [Google Wire](https://github.com/google/wire) under the hood.
 
 You get the developer experience of a modern, automated framework with the safety and performance of purely static code.
 
-* **Zero Runtime Overhead:** The generated container is exactly as fast and memory-efficient as manually written Go code.
-* **No Reflection:** Everything is evaluated at compile-time. If your code compiles, your dependency graph is 100% safe.
-* **Auto-Discovery:** Just embed a marker into your structs. Flora reads your constructors and wires the entire graph automatically.
-* **Native Go Idioms:** Full, automatic support for constructors returning initialization `error`s and `cleanup func()` routines for graceful shutdowns.
+- **Zero Runtime Overhead:** The generated container is exactly as fast and memory-efficient as manually written Go code.
+- **No Reflection:** Everything is evaluated at compile-time. If your code compiles, your dependency graph is 100% safe.
+- **Auto-Discovery:** Just embed a marker into your structs. Flora reads your constructors and wires the entire graph automatically.
+- **Native Go Idioms:** Full, automatic support for constructors returning initialization `error`s and `cleanup func()` routines for graceful shutdowns.
 
 ---
 
@@ -61,7 +61,7 @@ Instead of maintaining huge initialization scripts, you define dependencies decl
 ```go
 package main
 
-import "github.com/soner3/flora"
+import "[github.com/soner3/flora](https://github.com/soner3/flora)"
 
 // 1. Mark your struct as a component
 type Greeter struct {
@@ -85,12 +85,14 @@ func NewApp(g *Greeter) *App {
     return &App{greeter: g}
 }
 
+
 ```
 
 Generate the container by running the CLI in your project root:
 
 ```bash
 flora gen -i . -o .
+
 
 ```
 
@@ -106,63 +108,69 @@ Use this for structs that you own and write yourself (e.g., Services, Handlers, 
 
 **Default Behaviors:**
 
-* **Constructor:** Flora automatically looks for an exported function named `New<StructName>` (e.g., `NewUserService`).
-* **Scope:** `singleton` (one instance per application container).
-* **Interfaces:** If the struct implements any interfaces, Flora binds them automatically.
+- **Constructor:** Flora automatically looks for an exported function named `New<StructName>` (e.g., `NewUserService`).
+- **Scope:** `singleton` (one instance per application container).
+- **Interfaces:** If the struct implements any interfaces, Flora binds them automatically.
+- **Qualifier Name:** By default, the qualifier name is the struct's name.
 
 **Tag Reference:**
 You can override the default behavior using the `flora` struct tag. Multiple tags can be combined using commas.
 
-| Tag | Example | Description |
-| :--- | :--- | :--- |
-| *(Shorthand)* | ``flora:"BuildApp"`` | Any string without a key-value pair is automatically treated as the `constructor` name. |
-| `constructor` | ``flora:"constructor=BuildApp"`` | Explicitly overrides the default `New<StructName>` constructor lookup. |
-| `primary` | ``flora:"primary"`` | Resolves interface collisions. If multiple structs implement the same interface, the primary one is injected. |
-| `scope` | ``flora:"scope=prototype"`` | Changes the lifecycle to a Factory function (a fresh instance is created per injection). |
-| `order` | ``flora:"order=1"`` | Defines the sorting order when the component is injected via Slice (`[]Interface`). |
-| *(Empty)* | ``flora:""`` | Explicitly marks a component with default rules (optional, embedding the struct is usually enough). |
+| Tag           | Example                        | Description                                                                                                   |
+| ------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| _(Shorthand)_ | `flora:"BuildApp"`             | Any string without a key-value pair is automatically treated as the `constructor` name.                       |
+| `constructor` | `flora:"constructor=BuildApp"` | Explicitly overrides the default `New<StructName>` constructor lookup.                                        |
+| `primary`     | `flora:"primary"`              | Resolves interface collisions. If multiple structs implement the same interface, the primary one is injected. |
+| `scope`       | `flora:"scope=prototype"`      | Changes the lifecycle to a Factory function (a fresh instance is created per injection).                      |
+| `order`       | `flora:"order=1"`              | Defines the sorting order when the component is injected via Slice (`[]Interface`).                           |
+| `name`        | `flora:"name=masterDB"`        | Assigns a specific qualifier name to this component to resolve duplicate types.                               |
+| `inject`      | `flora:"inject(db=masterDB)"`  | Injects a specifically named dependency (qualifier) into a named parameter of the constructor.                |
+| _(Empty)_     | `flora:""`                     | Explicitly marks a component with default rules (optional, embedding the struct is usually enough).           |
 
 ### 2. `flora.Configuration` (For Third-Party & Adapters)
 
 Use this when you cannot (or should not) modify the target struct. This is strictly meant for **Third-Party Integrations** (like `*sql.DB`, `*redis.Client`) or functional paradigms (like pure HTTP Middlewares).
 
-Instead of embedding a marker into the target struct, you create a config struct and use **Magic Comments** (`// flora:...`) above its provider methods.
+Instead of embedding a marker into the target struct, you create a config struct and use **Magic Comments** (`// flora:...`) above its provider methods. Only the first flora tag will be parsed.
 
 ```go
 package config
 
 import (
     "database/sql"
-    "github.com/soner3/flora"
+    "[github.com/soner3/flora](https://github.com/soner3/flora)"
 )
 
 type DatabaseConfig struct {
     flora.Configuration
 }
 
-// flora:primary
+// flora:primary,name=primaryDB
 func (c *DatabaseConfig) ProvidePostgres() (*sql.DB, func(), error) {
     db, err := sql.Open("postgres", "...")
     if err != nil {
       return nil, nil, err
     }
-    
+
     // Flora handles the cleanup function automatically during graceful shutdown!
     cleanup := func() { db.Close() }
-    
-    return db, cleanup, nil 
+
+    return db, cleanup, nil
 }
+
 
 ```
 
 **Magic Comment Reference:**
 Because Go does not allow struct tags on functions, Flora reads the comments immediately preceding the provider method.
 
-| Comment | Description |
-| --- | --- |
-| `// flora:primary` | Marks the returned type as the primary implementation. |
-| `// flora:scope=prototype` | Changes the lifecycle to a Factory function. |
-| `// flora:order=1` | Defines the sorting order when injected via Slice (`[]Interface`). |
+| Comment                           | Description                                                                                |
+| --------------------------------- | ------------------------------------------------------------------------------------------ |
+| `// flora:primary`                | Marks the returned type as the primary implementation.                                     |
+| `// flora:scope=prototype`        | Changes the lifecycle to a Factory function.                                               |
+| `// flora:order=1`                | Defines the sorting order when injected via Slice (`[]Interface`).                         |
+| `// flora:name=primaryDB`         | Assigns a specific qualifier name to this provider to resolve duplicate types.             |
+| `// flora:inject(conn=primaryDB)` | Injects a specifically named dependency (qualifier) into a named parameter of this method. |
 
 ---
 
@@ -175,7 +183,7 @@ In Hexagonal or Clean Architecture, your core domain should not have direct depe
 ```go
 package domain
 
-import "github.com/soner3/flora"
+import "[github.com/soner3/flora](https://github.com/soner3/flora)"
 
 // 1. Define a neutral alias in your domain layer
 type DIComponent = flora.Component
@@ -184,6 +192,34 @@ type DIComponent = flora.Component
 type UserService struct {
     DIComponent `flora:"primary"`
     repo UserRepository
+}
+
+
+```
+
+### Named Dependencies (Qualifiers)
+
+When you have multiple components of the same type (e.g., two database connections), you can use the `name` tag to give them a unique identifier (The default name is the struct name. But you can override it using `flora:"name=customName"`). To inject a specific named component, use the `inject()` tag, specifying which parameter of your constructor should receive which named dependency.
+
+```go
+// 1. Define named configuration providers
+type DBConfig struct { flora.Configuration }
+
+// flora:name=masterDB
+func (c *DBConfig) ProvideMaster() *sql.DB { /* ... */ }
+
+// flora:name=replicaDB
+func (c *DBConfig) ProvideReplica() *sql.DB { /* ... */ }
+
+// 2. Inject the named dependencies by referencing the parameter names
+type UserService struct {
+    // Injects the 'masterDB' component into the 'writeDB' parameter,
+    // and 'replicaDB' into the 'readDB' parameter of the constructor.
+    flora.Component `flora:"inject(writeDB=masterDB, readDB=replicaDB)"`
+}
+
+func NewUserService(writeDB *sql.DB, readDB *sql.DB) *UserService {
+    return &UserService{/*...*/}
 }
 
 ```
@@ -208,6 +244,7 @@ func NewServer(middlewares []Middleware) *Server {
     return &Server{chain: middlewares}
 }
 
+
 ```
 
 ---
@@ -216,11 +253,11 @@ func NewServer(middlewares []Middleware) *Server {
 
 The best way to master Flora is by looking at the provided examples. Check out the **[`/examples`](https://github.com/soner3/flora/tree/master/examples)** directory in this repository. It contains focused, runnable scenarios ranging from basic to advanced:
 
-* **`01_basic_component`**: The absolute basics. Struct embedding, interfaces, and auto-wiring.
-* **`02_configuration`**: How to use `@Configuration` to integrate external packages and manage graceful shutdowns (`cleanup func()`).
-* **`03_prototypes`**: How to generate and inject Factory closures (`func() (*Struct, error)`) instead of Singletons.
-* **`04_slices`**: How to utilize Multi-Binding to automatically collect and sort plugins/middlewares into a slice.
-* **`99_webapp`**: **(Recommended)** A simple REST API implementing routing, middlewares, and a mock database.
+- **`01_basic_component`**: The absolute basics. Struct embedding, interfaces, and auto-wiring.
+- **`02_configuration`**: How to use `@Configuration` to integrate external packages and manage graceful shutdowns (`cleanup func()`).
+- **`03_prototypes`**: How to generate and inject Factory closures (`func() (*Struct, error)`) instead of Singletons.
+- **`04_slices`**: How to utilize Multi-Binding to automatically collect and sort plugins/middlewares into a slice.
+- **`99_webapp`**: **(Recommended)** A simple REST API implementing routing, middlewares, and a mock database.
 
 ---
 
@@ -228,11 +265,9 @@ The best way to master Flora is by looking at the provided examples. Check out t
 
 Flora v1.0.0 is stable and production-ready, but we are just getting started! Here are some of the major features planned for future releases. If you are interested in any of these, feel free to open an issue!
 
-* **Named Dependencies (Qualifiers):** Support for tags like `flora:"qualifier=masterDB"` to easily manage multiple instances of the same interface or struct type (e.g., a Master and a Replica Database).
-* **Graph Visualization:** A `flora graph` command that exports your entire architectural dependency graph into a visual Mermaid diagram.
-* **CLI Watch Mode:** A `flora gen --watch` flag that runs in the background and instantly updates your `flora_container.go` file whenever you save a Go file, for a seamless developer experience.
-* **Test Environments & Mock Swapping:** A dedicated `flora gen --test` mode that generates a testing container, allowing you to easily swap out deep dependencies with mocks (e.g., via `gomock`) for integration tests.
-* **Generics Support (Go 1.18+):** Full AST resolution for generic repositories and services (e.g., `NewGenericRepo[T any]()`) to eliminate even more boilerplate code.
+- **Graph Visualization:** A `flora graph` command that exports your entire architectural dependency graph into a visual Mermaid diagram.
+- **Test Environments & Mock Swapping:** A dedicated `flora gen --test` mode that generates a testing container, allowing you to easily swap out deep dependencies with mocks (e.g., via `gomock`) for integration tests.
+- **Generics Support (Go 1.18+):** Full AST resolution for generic repositories and services (e.g., `NewGenericRepo[T any]()`) to eliminate even more boilerplate code.
 
 ---
 

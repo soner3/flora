@@ -34,19 +34,26 @@ var generateCmd = &cobra.Command{
 	Use:     "generate",
 	Aliases: []string{"gen"},
 	Short:   "Generates the type-safe Flora DI container",
-	Long: `Scans the specified input directory for 'flora.Component' and 'flora.Configuration' tags.
-It resolves the dependency graph, validates missing or duplicate providers, 
-and uses Google Wire under the hood to generate a reflection-free, type-safe DI container.
+	Long: `The 'flora generate' command is the core engine of the Flora Dependency Injection framework.
 
-The resulting 'flora_container.go' will be placed in your specified output directory.`,
-	Example: `  # Scan current directory and generate container in the 'flora' folder (defaults)
+It statically analyzes your Go source code (AST) looking for 'flora.Component' 
+and 'flora.Configuration' markers to automatically discover your application's architecture.
+
+Features:
+  - Scans directories recursively to build a complete dependency graph.
+  - Generates a clean, human-readable 'flora_container.go' file.
+  - Supports an interactive '--watch' mode for rapid local development.`,
+	Example: `  # 1. Default: Scan the current directory and generate the container in the './flora' folder
   flora generate
 
-  # Scan specific directory and output to the 'cmd/server' package
-  flora generate -i ./internal -o ./cmd/server
+  # 2. Custom Paths: Scan the './internal' folder and output to a specific package
+  flora generate --input ./internal --output ./cmd/server
   
-  # Using the alias
-  flora gen -i ./pkg/services`,
+  # 3. Watch Mode: Run in the background and auto-regenerate on any file change in the current directory
+  flora gen --watch
+
+  # 4. Advanced Watch: Watch a specific source directory while scanning another
+  flora gen -i ./pkg/services -o ./internal/di --watch --watch-dir ./pkg`,
 	SilenceUsage: true,
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		log := slog.With("pkg", "cmd")
