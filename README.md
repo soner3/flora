@@ -84,18 +84,12 @@ type App struct {
 func NewApp(g *Greeter) *App {
     return &App{greeter: g}
 }
-
-
-
 ```
 
 Generate the container by running the CLI in your project root:
 
 ```bash
 flora gen -i . -o .
-
-
-
 ```
 
 ---
@@ -159,9 +153,6 @@ func (c *DatabaseConfig) ProvidePostgres() (*sql.DB, func(), error) {
 
     return db, cleanup, nil
 }
-
-
-
 ```
 
 **Magic Comment Reference:**
@@ -196,9 +187,6 @@ type UserService struct {
     DIComponent `flora:"primary"`
     repo UserRepository
 }
-
-
-
 ```
 
 ### Named Dependencies (Qualifiers)
@@ -225,8 +213,6 @@ type UserService struct {
 func NewUserService(writeDB *sql.DB, readDB *sql.DB) *UserService {
     return &UserService{/*...*/}
 }
-
-
 ```
 
 ### Multi-Binding (Slice Injection)
@@ -254,7 +240,6 @@ func (c *RouteConfig) ProvideApiRoute() *Route {
 func NewRouter(routes []*Route) *Router {
     return &Router{routes: routes}
 }
-
 ```
 
 ---
