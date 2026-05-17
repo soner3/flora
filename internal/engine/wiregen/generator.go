@@ -432,9 +432,14 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 			finalReturnType = providerAliasName
 		}
 
-		wrapperName := "ProvideWrapper_" + sanitize(comp.ConstructorName)
+		prefix := "ProvideWrapper_"
+		if isPrototype {
+			prefix = "ProvidePrototype_"
+		}
+
+		wrapperName := prefix + sanitize(comp.ConstructorName)
 		if isConfig {
-			wrapperName = "ProvideWrapper_" + sanitize(comp.ConfigStructName) + "_" + sanitize(comp.ConfigMethodName)
+			wrapperName = prefix + sanitize(comp.ConfigStructName) + "_" + sanitize(comp.ConfigMethodName)
 		}
 
 		if needsWrapper {

@@ -86,12 +86,14 @@ func NewApp(g *Greeter) *App {
 }
 
 
+
 ```
 
 Generate the container by running the CLI in your project root:
 
 ```bash
 flora gen -i . -o .
+
 
 
 ```
@@ -122,7 +124,7 @@ You can override the default behavior using the `flora` struct tag. Multiple tag
 | `constructor` | `flora:"constructor=BuildApp"` | Explicitly overrides the default `New<StructName>` constructor lookup.                                        |
 | `primary`     | `flora:"primary"`              | Resolves interface collisions. If multiple structs implement the same interface, the primary one is injected. |
 | `scope`       | `flora:"scope=prototype"`      | Changes the lifecycle to a Factory function (a fresh instance is created per injection).                      |
-| `order`       | `flora:"order=1"`              | Defines the sorting order when the component is injected via Slice (`[]Interface`).                           |
+| `order`       | `flora:"order=1"`              | Defines the sorting order when the component is injected via Slice (`[]Type`).                                |
 | `name`        | `flora:"name=masterDB"`        | Assigns a specific qualifier name to this component to resolve duplicate types.                               |
 | `inject`      | `flora:"inject(db=masterDB)"`  | Injects a specifically named dependency (qualifier) into a named parameter of the constructor.                |
 | _(Empty)_     | `flora:""`                     | Explicitly marks a component with default rules (optional, embedding the struct is usually enough).           |
@@ -159,6 +161,7 @@ func (c *DatabaseConfig) ProvidePostgres() (*sql.DB, func(), error) {
 }
 
 
+
 ```
 
 **Magic Comment Reference:**
@@ -168,7 +171,7 @@ Because Go does not allow struct tags on functions, Flora reads the comments imm
 | --------------------------------- | ------------------------------------------------------------------------------------------ |
 | `// flora:primary`                | Marks the returned type as the primary implementation.                                     |
 | `// flora:scope=prototype`        | Changes the lifecycle to a Factory function.                                               |
-| `// flora:order=1`                | Defines the sorting order when injected via Slice (`[]Interface`).                         |
+| `// flora:order=1`                | Defines the sorting order when injected via Slice (`[]Type`).                              |
 | `// flora:name=primaryDB`         | Assigns a specific qualifier name to this provider to resolve duplicate types.             |
 | `// flora:inject(conn=primaryDB)` | Injects a specifically named dependency (qualifier) into a named parameter of this method. |
 
@@ -193,6 +196,7 @@ type UserService struct {
     DIComponent `flora:"primary"`
     repo UserRepository
 }
+
 
 
 ```
@@ -222,28 +226,34 @@ func NewUserService(writeDB *sql.DB, readDB *sql.DB) *UserService {
     return &UserService{/*...*/}
 }
 
+
 ```
 
 ### Multi-Binding (Slice Injection)
 
-Building extensible systems usually requires tedious array wiring. With Flora, you simply define an interface, implement it multiple times, and request a slice `[]YourInterface`. Flora handles the aggregation and sorting based on the `order` tag.
+Building extensible systems usually requires tedious array wiring. With Flora, you simply ask for a slice of **any** type in your consumer's constructor. This works perfectly for:
+
+- **Interfaces** (e.g., `[]Middleware` or `[]Plugin`)
+- **Concrete Pointers** (e.g., `[]*Route`)
+- **Structs & Type Aliases**
+
+Flora automatically scans your codebase, bundles all matching implementations together into a slice, and sorts them based on the `order` tag.
 
 ```go
-// flora:order=1
-func (c *MiddlewareConfig) ProvideLogger() Middleware {
-    return &LoggerMiddleware{}
+// flora:name=homeRoute, order=1
+func (c *RouteConfig) ProvideHomeRoute() *Route {
+    return &Route{Path: "/"}
 }
 
-// flora:order=2
-func (c *MiddlewareConfig) ProvideAuth(repo *Repository) Middleware {
-    return &AuthMiddleware{repo: repo}
+// flora:name=apiRoute, order=2
+func (c *RouteConfig) ProvideApiRoute() *Route {
+    return &Route{Path: "/api"}
 }
 
-// Flora automatically bundles Logger and Auth into a sorted slice!
-func NewServer(middlewares []Middleware) *Server {
-    return &Server{chain: middlewares}
+// Flora automatically bundles all *Route providers into a sorted slice!
+func NewRouter(routes []*Route) *Router {
+    return &Router{routes: routes}
 }
-
 
 ```
 
@@ -256,14 +266,12 @@ The best way to master Flora is by looking at the provided examples. Check out t
 - **`01_basic_component`**: The absolute basics. Struct embedding, interfaces, and auto-wiring.
 - **`02_configuration`**: How to use `@Configuration` to integrate external packages and manage graceful shutdowns (`cleanup func()`).
 - **`03_prototypes`**: How to generate and inject Factory closures (`func() (*Struct, error)`) instead of Singletons.
-- **`04_slices`**: How to utilize Multi-Binding to automatically collect and sort plugins/middlewares into a slice.
+- **`04_slices`**: How to utilize Multi-Binding to automatically collect and sort any type (interfaces, pointers, etc.) into a slice.
 - **`99_webapp`**: **(Recommended)** A simple REST API implementing routing, middlewares, and a mock database.
 
 ---
 
 ## Roadmap (What's Next)
-
-Flora v1.0.0 is stable and production-ready, but we are just getting started! Here are some of the major features planned for future releases. If you are interested in any of these, feel free to open an issue!
 
 - **Graph Visualization:** A `flora graph` command that exports your entire architectural dependency graph into a visual Mermaid diagram.
 - **Test Environments & Mock Swapping:** A dedicated `flora gen --test` mode that generates a testing container, allowing you to easily swap out deep dependencies with mocks (e.g., via `gomock`) for integration tests.

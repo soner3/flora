@@ -9,11 +9,13 @@ package main
 // Injectors from flora_injector.go:
 
 func InitializeContainer() (*FloraContainer, func(), error) {
-	v := ProvidePrototypeSession()
-	server := NewServer(v)
+	v := ProvideWrapper_DatabaseConfig_ProvideTransaction()
+	v2 := ProvideWrapper_NewSession()
+	server := NewServer(v2, v)
 	floraContainer := &FloraContainer{
-		Server:         server,
-		SessionFactory: v,
+		ProvideTransactionFactory: v,
+		Server:                    server,
+		SessionFactory:            v2,
 	}
 	return floraContainer, func() {
 	}, nil
@@ -21,13 +23,26 @@ func InitializeContainer() (*FloraContainer, func(), error) {
 
 // flora_injector.go:
 
-func ProvidePrototypeSession() func() *Session {
+func ProvideWrapper_DatabaseConfig_ProvideTransaction() func() (*DBTransaction, func(), error) {
+	return func() (*DBTransaction, func(), error) {
+
+		flora_cfg_struct := DatabaseConfig{}
+		return flora_cfg_struct.ProvideTransaction()
+
+	}
+}
+
+func ProvideWrapper_NewSession() func() *Session {
 	return func() *Session {
+
 		return NewSession()
+
 	}
 }
 
 type FloraContainer struct {
+	ProvideTransactionFactory func() (*DBTransaction, func(), error)
+
 	Server *Server
 
 	SessionFactory func() *Session

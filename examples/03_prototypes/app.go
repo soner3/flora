@@ -22,42 +22,88 @@ import (
 	"github.com/soner3/flora"
 )
 
-// ---------------------------------------------------------
-// 1. The Prototype Component
-// ---------------------------------------------------------
+// =========================================================
+// EXAMPLE 1: Simple Prototype (via flora.Component)
+// =========================================================
+
 type Session struct {
 	// The struct tag changes the lifecycle from singleton to prototype
 	flora.Component `flora:"scope=prototype"`
 	ID              int
 }
 
-// Every time the factory is called, this constructor runs again
 func NewSession() *Session {
-	// We generate a random ID to prove it's a fresh instance every time
 	id := rand.New(rand.NewSource(time.Now().UnixNano())).Intn(10000)
-	fmt.Printf("-> [Factory] Created a brand new Session with ID: %d\n", id)
+	fmt.Printf("   -> [Factory] Created fresh Session [%d]\n", id)
 	return &Session{ID: id}
 }
 
-// ---------------------------------------------------------
-// 2. The Singleton Consumer
-// ---------------------------------------------------------
+// =========================================================
+// EXAMPLE 2: Advanced Prototype (via flora.Configuration)
+// Useful for request-scoped resources that need cleanup/errors
+// =========================================================
+
+// An external struct (e.g. from a database library)
+type DBTransaction struct {
+	TxID int
+}
+
+type DatabaseConfig struct {
+	flora.Configuration
+}
+
+// flora:scope=prototype
+func (c *DatabaseConfig) ProvideTransaction() (*DBTransaction, func(), error) {
+	txID := rand.New(rand.NewSource(time.Now().UnixNano())).Intn(999)
+	fmt.Printf("   -> [Factory] Opened DB Transaction [%d]\n", txID)
+
+	tx := &DBTransaction{TxID: txID}
+
+	// This cleanup function is returned to the caller of the factory!
+	cleanup := func() {
+		fmt.Printf("   <- [Cleanup] Closed DB Transaction [%d]\n", txID)
+	}
+
+	// We can safely return initialization errors here
+	return tx, cleanup, nil
+}
+
+// =========================================================
+// 3. The Singleton Consumer
+// =========================================================
+
 type Server struct {
 	flora.Component // Default scope is Singleton (only one server exists)
 
-	// IMPORTANT: Because Session is a prototype, we don't inject '*Session'.
-	// We inject a factory function that RETURNS a '*Session'!
+	// We inject the factory closures instead of the instances!
 	sessionFactory func() *Session
+	txFactory      func() (*DBTransaction, func(), error)
 }
 
-// Flora sees the factory signature and automatically injects the generated closure.
-func NewServer(factory func() *Session) *Server {
+// Flora sees the factory signatures and automatically injects the generated closures.
+func NewServer(sFac func() *Session, txFac func() (*DBTransaction, func(), error)) *Server {
 	fmt.Println("-> [Init] Server initialized (Singleton)")
-	return &Server{sessionFactory: factory}
+	return &Server{
+		sessionFactory: sFac,
+		txFactory:      txFac,
+	}
 }
 
 func (s *Server) HandleRequest(user string) {
-	// Call the factory to get a fresh session just for this request
+	fmt.Printf("Server handling request for: %s\n", user)
+
+	// 1. Get a simple prototype instance
 	session := s.sessionFactory()
-	fmt.Printf("Server handling request for %s using Session %d\n\n", user, session.ID)
+
+	// 2. Get an advanced prototype instance (with error and cleanup)
+	tx, cleanupTx, err := s.txFactory()
+	if err != nil {
+		fmt.Printf("   [Error] Could not open transaction: %v\n", err)
+		return
+	}
+
+	// Ensure the prototype resource is safely cleaned up after the request!
+	defer cleanupTx()
+
+	fmt.Printf("   Processing %s's data with Session %d and Tx %d\n\n", user, session.ID, tx.TxID)
 }
