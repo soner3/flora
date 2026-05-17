@@ -9,8 +9,8 @@ package main
 // Injectors from flora_injector.go:
 
 func InitializeContainer() (*FloraContainer, func(), error) {
-	v := ProvideWrapper_DatabaseConfig_ProvideTransaction()
-	v2 := ProvideWrapper_NewSession()
+	v := ProvidePrototype_DatabaseConfig_ProvideTransaction()
+	v2 := ProvidePrototype_NewSession()
 	server := NewServer(v2, v)
 	floraContainer := &FloraContainer{
 		ProvideTransactionFactory: v,
@@ -23,7 +23,7 @@ func InitializeContainer() (*FloraContainer, func(), error) {
 
 // flora_injector.go:
 
-func ProvideWrapper_DatabaseConfig_ProvideTransaction() func() (*DBTransaction, func(), error) {
+func ProvidePrototype_DatabaseConfig_ProvideTransaction() func() (*DBTransaction, func(), error) {
 	return func() (*DBTransaction, func(), error) {
 
 		flora_cfg_struct := DatabaseConfig{}
@@ -32,7 +32,7 @@ func ProvideWrapper_DatabaseConfig_ProvideTransaction() func() (*DBTransaction, 
 	}
 }
 
-func ProvideWrapper_NewSession() func() *Session {
+func ProvidePrototype_NewSession() func() *Session {
 	return func() *Session {
 
 		return NewSession()
