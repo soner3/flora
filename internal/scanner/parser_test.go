@@ -120,11 +120,6 @@ func TestParsePackages(t *testing.T) {
 			expErr:       ErrInvalidMetadata,
 		},
 		{
-			name:         "TestParsePackagesHappyQualifier",
-			testdataPath: "testdata/happy_qualifier",
-			expErr:       nil,
-		},
-		{
 			name:         "TestParsePackagesPrototypeWithParams",
 			testdataPath: "testdata/err_prototype_param",
 			expErr:       ErrInvalidProviderFunc,
@@ -172,6 +167,26 @@ func TestParsePackages(t *testing.T) {
 		{
 			name:         "TestParsePackagesErrInjectUnknownParam",
 			testdataPath: "testdata/err_inject_unknown_param",
+			expErr:       ErrInvalidMetadata,
+		},
+		{
+			name:         "TestParsePackagesErrSliceAny",
+			testdataPath: "testdata/err_slice_any",
+			expErr:       ErrInvalidSlice,
+		},
+		{
+			name:         "TestParsePackagesHappySlicePtr",
+			testdataPath: "testdata/happy_slice_ptr",
+			expErr:       nil,
+		},
+		{
+			name:         "TestParsePackagesErrQualifierCollisionType",
+			testdataPath: "testdata/err_qualifier_collision_type",
+			expErr:       ErrInvalidMetadata,
+		},
+		{
+			name:         "TestParsePackagesErrInjectTypeMismatch",
+			testdataPath: "testdata/err_inject_type_mismatch",
 			expErr:       ErrInvalidMetadata,
 		},
 	}

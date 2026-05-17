@@ -95,11 +95,11 @@ func TestGenerate(t *testing.T) {
 						PackagePath:     "github.com/test/otherpkg",
 						StructName:      "Service",
 						ConstructorName: "NewService",
-						Implements: []engine.InterfaceMetadata{
+						Implements: []engine.TypeMetadata{
 							{
-								PackageName:   "main",
-								PackagePath:   "github.com/test/main",
-								InterfaceName: "MyInterface",
+								PackageName: "main",
+								PackagePath: "github.com/test/main",
+								TypeName:    "MyInterface",
 							},
 						},
 					},
@@ -120,11 +120,11 @@ func TestGenerate(t *testing.T) {
 						StructName:      "ProtoService",
 						ConstructorName: "NewProtoService",
 						Scope:           "prototype",
-						Implements: []engine.InterfaceMetadata{
+						Implements: []engine.TypeMetadata{
 							{
-								PackageName:   "main",
-								PackagePath:   "github.com/test/main",
-								InterfaceName: "MyInterface",
+								PackageName: "main",
+								PackagePath: "github.com/test/main",
+								TypeName:    "MyInterface",
 							},
 						},
 					},
@@ -429,10 +429,10 @@ func TestGenerate(t *testing.T) {
 				},
 				SliceBindings: []*engine.SliceBindingMetadata{
 					{
-						Interface: engine.InterfaceMetadata{
-							PackageName:   "pkg",
-							PackagePath:   "github.com/test/pkg",
-							InterfaceName: "MyInterface",
+						Type: engine.TypeMetadata{
+							PackageName: "pkg",
+							PackagePath: "github.com/test/pkg",
+							TypeName:    "MyInterface",
 						},
 						Implementations: []*engine.ComponentMetadata{
 							{
@@ -474,21 +474,21 @@ func TestGenerate(t *testing.T) {
 						StructName: "ProtoC", ConstructorName: "NewProtoC",
 						QualifierName: "ProtoC", Scope: "prototype",
 						HasCleanup: true, HasError: false,
-						Implements: []engine.InterfaceMetadata{{PackageName: "pkg", PackagePath: "pkg", InterfaceName: "IfaceC"}},
+						Implements: []engine.TypeMetadata{{PackageName: "pkg", PackagePath: "pkg", TypeName: "IfaceC"}},
 					},
 					{
 						PackageName: "pkg", PackagePath: "pkg",
 						StructName: "ProtoE", ConstructorName: "NewProtoE",
 						QualifierName: "ProtoE", Scope: "prototype",
 						HasCleanup: false, HasError: true,
-						Implements: []engine.InterfaceMetadata{{PackageName: "pkg", PackagePath: "pkg", InterfaceName: "IfaceE"}},
+						Implements: []engine.TypeMetadata{{PackageName: "pkg", PackagePath: "pkg", TypeName: "IfaceE"}},
 					},
 					{
 						PackageName: "pkg", PackagePath: "pkg",
 						StructName: "ProtoCE", ConstructorName: "NewProtoCE",
 						QualifierName: "ProtoCE", Scope: "prototype",
 						HasCleanup: true, HasError: true,
-						Implements: []engine.InterfaceMetadata{{PackageName: "pkg", PackagePath: "pkg", InterfaceName: "IfaceCE"}},
+						Implements: []engine.TypeMetadata{{PackageName: "pkg", PackagePath: "pkg", TypeName: "IfaceCE"}},
 					},
 					{
 						PackageName: "pkg", PackagePath: "pkg",
@@ -503,12 +503,52 @@ func TestGenerate(t *testing.T) {
 				},
 				SliceBindings: []*engine.SliceBindingMetadata{
 					{
-						Interface: engine.InterfaceMetadata{PackageName: "pkg", PackagePath: "pkg", InterfaceName: "SliceIface"},
+						Type: engine.TypeMetadata{PackageName: "pkg", PackagePath: "pkg", TypeName: "SliceIface"},
 						Implementations: []*engine.ComponentMetadata{
 							{
 								PackageName: "pkg", PackagePath: "pkg",
 								StructName: "SliceImpl", ConstructorName: "NewSliceImpl1",
 								QualifierName: "SliceImpl",
+							},
+						},
+					},
+				},
+			},
+			expErr: ErrWireExecution,
+		},
+		{
+			name: "TestSliceBindingLocalPrefixTrimming",
+			setupDir: func(t *testing.T) string {
+				tmpDir, err := os.MkdirTemp(".", "flora_test_out_*")
+				if err != nil {
+					t.Fatal(err)
+				}
+				dummyFile := filepath.Join(tmpDir, "dummy.go")
+				os.WriteFile(dummyFile, []byte("package custompkg\n"), 0644)
+				return tmpDir
+			},
+			genCtx: &engine.GeneratorContext{
+				Components: []*engine.ComponentMetadata{
+					{
+						PackageName:     "custompkg",
+						PackagePath:     "github.com/test/custompkg",
+						StructName:      "MyImpl",
+						ConstructorName: "NewMyImpl",
+					},
+				},
+				SliceBindings: []*engine.SliceBindingMetadata{
+					{
+						Type: engine.TypeMetadata{
+							PackageName: "custompkg",
+							PackagePath: "github.com/test/custompkg",
+							TypeName:    "custompkg.MyInterface",
+						},
+						Implementations: []*engine.ComponentMetadata{
+							{
+								PackageName:     "custompkg",
+								PackagePath:     "github.com/test/custompkg",
+								StructName:      "MyImpl",
+								ConstructorName: "NewMyImpl",
 							},
 						},
 					},

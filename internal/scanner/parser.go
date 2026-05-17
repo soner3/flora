@@ -194,9 +194,6 @@ func isMarkedWith(structType *types.Struct) (bool, string, string) {
 
 // parseFloraTag parses the flora tag and sets the metadata accordingly
 func parseFloraTag(rawTag string, metadata *engine.ComponentMetadata) error {
-	if metadata.ConfigStructName == "" {
-		metadata.ConstructorName = "New" + metadata.StructName
-	}
 	metadata.IsPrimary = false
 	metadata.Scope = ScopeSingleton
 	metadata.Order = math.MaxInt32
@@ -241,13 +238,6 @@ func parseFloraTag(rawTag string, metadata *engine.ComponentMetadata) error {
 		switch {
 		case part == "primary":
 			metadata.IsPrimary = true
-		case strings.HasPrefix(part, "constructor="):
-			if metadata.ConfigStructName == "" {
-				metadata.ConstructorName = strings.TrimPrefix(part, "constructor=")
-			}
-			if err := isExported(metadata); err != nil {
-				return err
-			}
 		case strings.HasPrefix(part, "scope="):
 			scope := strings.TrimPrefix(part, "scope=")
 			if !slices.Contains(scopes, scope) {
@@ -277,12 +267,19 @@ func parseFloraTag(rawTag string, metadata *engine.ComponentMetadata) error {
 				}
 				metadata.InjectParams[strings.TrimSpace(kv[0])] = strings.TrimSpace(kv[1])
 			}
+		case strings.HasPrefix(part, "constructor="):
+			if metadata.ConfigStructName == "" {
+				metadata.ConstructorName = strings.TrimPrefix(part, "constructor=")
+				if err := isExported(metadata); err != nil {
+					return err
+				}
+			}
 		default:
 			if metadata.ConfigStructName == "" {
 				metadata.ConstructorName = part
-			}
-			if err := isExported(metadata); err != nil {
-				return err
+				if err := isExported(metadata); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -293,9 +290,10 @@ func parseFloraTag(rawTag string, metadata *engine.ComponentMetadata) error {
 // processComponent processes a component and returns a scannedComponent
 func processComponent(compInfo *componentInfo, neededInterfaces, neededSlices *map[string]types.Type) (*scannedComponent, error) {
 	metadata := &engine.ComponentMetadata{
-		StructName:  compInfo.Name,
-		PackageName: compInfo.Pkg.Name,
-		PackagePath: compInfo.Pkg.PkgPath,
+		StructName:      compInfo.Name,
+		PackageName:     compInfo.Pkg.Name,
+		PackagePath:     compInfo.Pkg.PkgPath,
+		ConstructorName: "New" + compInfo.Name,
 	}
 
 	if err := parseFloraTag(compInfo.Tag, metadata); err != nil {
@@ -336,15 +334,21 @@ func processProviderFunc(compInfo *componentInfo, metadata *engine.ComponentMeta
 
 		if sliceType, isSlice := paramType.(*types.Slice); isSlice {
 			elemType := sliceType.Elem()
-			if iface, isInterface := elemType.Underlying().(*types.Interface); isInterface {
-				if !iface.Empty() {
-					(*neededSlices)[elemType.String()] = elemType
-				}
+			isAny := false
+			if iface, isInterface := elemType.Underlying().(*types.Interface); isInterface && iface.Empty() {
+				isAny = true
 			}
+
+			if isAny {
+				chainErr := fmt.Errorf("%w: %v", ErrInvalidSlice, paramType)
+				return errs.Wrap(chainErr, "invalid slice parameter '%s' for component '%s': slices of empty interface (any) are not supported",
+					metadata.ConstructorName, metadata.StructName)
+			}
+
+			(*neededSlices)[elemType.String()] = elemType
 		}
 
 		if sigParam, isFunc := paramType.(*types.Signature); isFunc {
-
 			if sigParam.Params().Len() > 0 {
 				chainErr := fmt.Errorf("%w: %v", ErrInvalidProviderFunc, sigParam)
 				return errs.Wrap(chainErr, "invalid prototype provider func: '%s' for component '%s': prototype provider func must not have parameters",
@@ -362,7 +366,6 @@ func processProviderFunc(compInfo *componentInfo, metadata *engine.ComponentMeta
 				}
 			}
 		}
-
 	}
 
 	return nil
@@ -479,7 +482,11 @@ func validateProviderFunc(compInfo *componentInfo, metadata *engine.ComponentMet
 	}
 
 	if metadata.QualifierName == "" {
-		metadata.QualifierName = metadata.StructName
+		if metadata.ConfigMethodName != "" {
+			metadata.QualifierName = metadata.ConfigMethodName
+		} else {
+			metadata.QualifierName = metadata.StructName
+		}
 	}
 
 	return sig, nil
@@ -515,10 +522,10 @@ func bindInterfacesToComponents(components []*scannedComponent, neededInterfaces
 				return nil
 			}
 			if named, ok := ifaceType.(*types.Named); ok {
-				comp.Metadata.Implements = append(comp.Metadata.Implements, engine.InterfaceMetadata{
-					PackageName:   named.Obj().Pkg().Name(),
-					PackagePath:   named.Obj().Pkg().Path(),
-					InterfaceName: named.Obj().Name(),
+				comp.Metadata.Implements = append(comp.Metadata.Implements, engine.TypeMetadata{
+					PackageName: named.Obj().Pkg().Name(),
+					PackagePath: named.Obj().Pkg().Path(),
+					TypeName:    named.Obj().Name(),
 				})
 				log.Debug("Bound interface to component", "interface", neededName, "component", implementers[0].Metadata.StructName)
 
@@ -572,29 +579,52 @@ func bindSlicesToComponents(components []*scannedComponent, neededSlices map[str
 	var sliceBindings []*engine.SliceBindingMetadata
 
 	for neededName, neededType := range neededSlices {
-		iface := neededType.Underlying().(*types.Interface)
+		iface, isInterface := neededType.Underlying().(*types.Interface)
 		var implementers []*engine.ComponentMetadata
 
 		for _, comp := range components {
-			if types.Implements(comp.Type, iface) || types.Identical(comp.Type, neededType) {
+			isMatch := types.Identical(comp.Type, neededType)
+			if !isMatch && isInterface {
+				isMatch = types.Implements(comp.Type, iface)
+			}
+
+			if isMatch {
 				implementers = append(implementers, comp.Metadata)
 			}
 		}
 
-		if named, ok := neededType.(*types.Named); ok {
-			sliceBindings = append(sliceBindings, &engine.SliceBindingMetadata{
-				Interface: engine.InterfaceMetadata{
-					PackageName:   named.Obj().Pkg().Name(),
-					PackagePath:   named.Obj().Pkg().Path(),
-					InterfaceName: named.Obj().Name(),
-				},
-				Implementations: implementers,
-			})
-			log.Debug("Resolved slice binding", "interface", neededName, "implementations_count", len(implementers))
+		baseType := neededType
+		if ptr, isPtr := neededType.(*types.Pointer); isPtr {
+			baseType = ptr.Elem()
+		}
+
+		pkgName := ""
+		pkgPath := ""
+
+		if named, ok := baseType.(*types.Named); ok {
+			if named.Obj().Pkg() != nil {
+				pkgName = named.Obj().Pkg().Name()
+				pkgPath = named.Obj().Pkg().Path()
+			}
 		} else {
 			chainErr := fmt.Errorf("%w: %v", ErrInvalidSlice, neededType)
-			return nil, errs.Wrap(chainErr, "cannot bind anonymous slice '%s': only named slices and interfaces are supported", neededType.String())
+			return nil, errs.Wrap(chainErr, "cannot bind anonymous slice '%s': only named types are supported", neededType.String())
 		}
+		qualifier := func(p *types.Package) string {
+			return p.Name()
+		}
+		typeName := types.TypeString(neededType, qualifier)
+
+		sliceBindings = append(sliceBindings, &engine.SliceBindingMetadata{
+			Type: engine.TypeMetadata{
+				PackageName: pkgName,
+				PackagePath: pkgPath,
+				TypeName:    typeName,
+			},
+			Implementations: implementers,
+		})
+
+		log.Debug("Resolved slice binding", "type", neededName, "implementations_count", len(implementers))
 	}
 	return sliceBindings, nil
 }
@@ -738,23 +768,47 @@ func isExported(metadata *engine.ComponentMetadata) error {
 	return nil
 }
 
-// validateQualifiers checks if all requested qualifiers in inject(...) tags actually exist
+// validateQualifiers checks if all requested qualifiers in inject(...) tags actually exist,
+// ensures explicit qualifiers are unique, and validates type safety.
 func validateQualifiers(components []*scannedComponent) error {
-	availableQualifiers := make(map[string]bool)
+	availableQualifiers := make(map[string]*scannedComponent)
+
 	for _, comp := range components {
-		if comp.Metadata.QualifierName != "" {
-			availableQualifiers[comp.Metadata.QualifierName] = true
+		qName := comp.Metadata.QualifierName
+		if qName != "" {
+			if existing, exists := availableQualifiers[qName]; exists {
+				if existing.Type.String() != comp.Type.String() {
+					return errs.Wrap(ErrInvalidMetadata, "qualifier collision: the name '%s' is used by '%s' and '%s', but they return different types",
+						qName, comp.Metadata.StructName, existing.Metadata.StructName)
+				}
+			}
+			availableQualifiers[qName] = comp
 		}
 	}
 
 	for _, comp := range components {
 		for _, param := range comp.Metadata.Params {
 			if param.RequestedQualifier != "" {
-				if !availableQualifiers[param.RequestedQualifier] {
-					return errs.Wrap(ErrInvalidMetadata, "component '%s' requests qualifier '%s' for parameter '%s', but no provider with this qualifier name exists",
+
+				providerComp, exists := availableQualifiers[param.RequestedQualifier]
+				if !exists {
+					return errs.Wrap(ErrInvalidMetadata, "component '%s' requests qualifier '%s' for parameter '%s', but no provider with this name exists",
 						comp.Metadata.StructName,
 						param.RequestedQualifier,
 						param.Name)
+				}
+
+				providerTypeStr := types.TypeString(providerComp.Type, func(p *types.Package) string {
+					return p.Name()
+				})
+
+				if param.Type != providerTypeStr {
+					return errs.Wrap(ErrInvalidMetadata, "type mismatch in inject: component '%s' injects qualifier '%s' into parameter '%s'. Expected type '%s' but qualifier provides type '%s'",
+						comp.Metadata.StructName,
+						param.RequestedQualifier,
+						param.Name,
+						param.Type,
+						providerComp.Type.String())
 				}
 			}
 		}

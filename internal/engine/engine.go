@@ -15,10 +15,10 @@ limitations under the License.
 */
 package engine
 
-type InterfaceMetadata struct {
-	PackageName   string
-	PackagePath   string
-	InterfaceName string
+type TypeMetadata struct {
+	PackageName string
+	PackagePath string
+	TypeName    string
 }
 
 type ParamMetadata struct {
@@ -45,12 +45,12 @@ type ComponentMetadata struct {
 	ConfigPackagePath string
 	QualifierName     string
 	InjectParams      map[string]string
-	Implements        []InterfaceMetadata
+	Implements        []TypeMetadata
 	Params            []ParamMetadata
 }
 
 type SliceBindingMetadata struct {
-	Interface       InterfaceMetadata
+	Type            TypeMetadata
 	Implementations []*ComponentMetadata
 }
 

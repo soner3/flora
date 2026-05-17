@@ -13,16 +13,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package happyqualifier
+package errsliceany
 
-import (
-	"os"
+import "github.com/soner3/flora"
 
-	"github.com/soner3/flora"
-)
+type Bad struct{ flora.Component }
 
-type LocalType struct{}
-
-type Service struct{ flora.Component }
-
-func NewService(f *os.File, loc LocalType) *Service { return nil }
+func NewBad(s []any) *Bad { return nil }

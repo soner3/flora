@@ -331,19 +331,6 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 	typeCount := make(map[string]int)
 	reqQualifiers := make(map[string]bool)
 
-	formatType := func(pkgName, pkgPath, structName string, isPointer bool) string {
-		prefix := ""
-		if !isBuiltInType(structName) {
-			prefix = pkgName + "."
-			importSet[pkgPath] = true
-		}
-		ret := prefix + structName
-		if isPointer {
-			ret = "*" + ret
-		}
-		return ret
-	}
-
 	formatParamType := func(pType string) string {
 		pType = strings.ReplaceAll(pType, "*"+pkgName+".", "*")
 		pType = strings.ReplaceAll(pType, "[]"+pkgName+".", "[]")
@@ -354,7 +341,17 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 	}
 
 	for _, comp := range genCtx.Components {
-		retType := formatType(comp.PackageName, comp.PackagePath, comp.StructName, comp.IsPointer)
+		compPrefix := ""
+		if comp.PackageName != pkgName && !isBuiltInType(comp.StructName) {
+			compPrefix = comp.PackageName + "."
+			importSet[comp.PackagePath] = true
+		}
+
+		retType := compPrefix + comp.StructName
+		if comp.IsPointer {
+			retType = "*" + retType
+		}
+
 		typeCount[retType]++
 
 		for _, p := range comp.Params {
@@ -406,9 +403,6 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 		needsProviderAlias := typeCount[retType] > 1 || reqQualifiers[comp.QualifierName]
 
 		providerAliasName := "FloraQualifier_" + sanitize(comp.QualifierName)
-		if typeCount[retType] > 1 && comp.QualifierName == comp.StructName {
-			providerAliasName = "FloraAlias_" + sanitize(comp.ConstructorName)
-		}
 
 		if needsProviderAlias {
 			aliases[providerAliasName] = aliasData{
@@ -467,7 +461,7 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 			ifacePrefix := ""
 			if iface.PackageName != pkgName {
 				if iface.PackageName == "main" {
-					return errs.Wrap(ErrMainInterfaceLeak, "interface belongs to package 'main'")
+					return errs.Wrap(ErrMainInterfaceLeak, "type belongs to package 'main' (Go forbids importing main)")
 				}
 				ifacePrefix = iface.PackageName + "."
 				importSet[iface.PackagePath] = true
@@ -484,22 +478,22 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 				}
 				paramType := "func() (" + retSig + ")"
 
-				pbWrapperName := fmt.Sprintf("ProvidePrototypeBinding_%s_As_%s", sanitize(comp.QualifierName), sanitize(iface.InterfaceName))
+				pbWrapperName := fmt.Sprintf("ProvidePrototypeBinding_%s_As_%s", sanitize(comp.QualifierName), sanitize(iface.TypeName))
 				prototypeBindings = append(prototypeBindings, prototypeBindingData{
 					WrapperName:   pbWrapperName,
 					ParamType:     paramType,
-					InterfaceType: ifacePrefix + iface.InterfaceName,
+					InterfaceType: ifacePrefix + iface.TypeName,
 					HasCleanup:    comp.HasCleanup,
 					HasError:      comp.HasError,
 				})
 
 			} else {
-				bWrapperName := fmt.Sprintf("ProvideBinding_%s_As_%s", sanitize(comp.QualifierName), sanitize(iface.InterfaceName))
+				bWrapperName := fmt.Sprintf("ProvideBinding_%s_As_%s", sanitize(comp.QualifierName), sanitize(iface.TypeName))
 				bindings = append(bindings, bindingData{
 					WrapperName:   bWrapperName,
 					ParamType:     finalReturnType,
 					OriginalType:  retType,
-					InterfaceType: ifacePrefix + iface.InterfaceName,
+					InterfaceType: ifacePrefix + iface.TypeName, // HIER auch
 				})
 			}
 		}
@@ -512,8 +506,13 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 		}
 
 		fieldName := sanitize(comp.QualifierName)
-		if typeCount[retType] > 1 {
-			fieldName = sanitize(comp.ConstructorName)
+
+		if len(fieldName) > 0 {
+			r := []rune(fieldName)
+			if r[0] >= 'a' && r[0] <= 'z' {
+				r[0] -= 32
+			}
+			fieldName = string(r)
 		}
 
 		if isPrototype {
@@ -537,10 +536,15 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 			return cmp.Compare(a.Order, b.Order)
 		})
 
-		ifacePrefix := ""
-		if sb.Interface.PackageName != pkgName && sb.Interface.PackageName != "main" {
-			ifacePrefix = sb.Interface.PackageName + "."
-			importSet[sb.Interface.PackagePath] = true
+		if sb.Type.PackagePath != "" && sb.Type.PackageName != pkgName && sb.Type.PackageName != "main" {
+			importSet[sb.Type.PackagePath] = true
+		}
+
+		formattedType := sb.Type.TypeName
+
+		formattedType = strings.ReplaceAll(formattedType, "*"+pkgName+".", "*")
+		if after, ok := strings.CutPrefix(formattedType, pkgName+"."); ok {
+			formattedType = after
 		}
 
 		var impls []sliceImplData
@@ -557,11 +561,7 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 			implNeedsAlias := typeCount[implRetType] > 1 || reqQualifiers[impl.QualifierName]
 			paramType := implRetType
 			if implNeedsAlias {
-				if typeCount[implRetType] > 1 && impl.QualifierName == impl.StructName {
-					paramType = "FloraAlias_" + sanitize(impl.ConstructorName)
-				} else {
-					paramType = "FloraQualifier_" + sanitize(impl.QualifierName)
-				}
+				paramType = "FloraQualifier_" + sanitize(impl.QualifierName)
 			}
 
 			impls = append(impls, sliceImplData{
@@ -571,9 +571,24 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 			})
 		}
 
+		cleanName := sb.Type.TypeName
+		cleanName = strings.ReplaceAll(cleanName, "*", "Ptr_")
+		cleanName = strings.ReplaceAll(cleanName, "[]", "SliceOf_")
+		cleanName = strings.ReplaceAll(cleanName, ".", "_")
+
+		funcNameSuffix := sanitize(cleanName)
+
+		if len(funcNameSuffix) > 0 {
+			r := []rune(funcNameSuffix)
+			if r[0] >= 'a' && r[0] <= 'z' {
+				r[0] -= 32
+			}
+			funcNameSuffix = string(r)
+		}
+
 		sliceBindingsData = append(sliceBindingsData, sliceBindingData{
-			InterfaceName:   sb.Interface.InterfaceName,
-			InterfaceType:   ifacePrefix + sb.Interface.InterfaceName,
+			InterfaceName:   funcNameSuffix,
+			InterfaceType:   formattedType,
 			Implementations: impls,
 		})
 	}

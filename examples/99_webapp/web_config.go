@@ -58,7 +58,7 @@ func (c *WebConfig) ProvideRouter(controllers []controller.Controller, middlewar
 	return r
 }
 
-// flora:primary, inject(startupDB=masterDB)
+// flora:primary, inject(startupDB=masterDB), name=Server
 func (c *WebConfig) ProvideServer(cfg *config.AppConfig, handler http.Handler, startupDB *sql.DB) (*http.Server, func(), error) {
 	fmt.Println("-> [Web] Pinging Master DB before starting server...")
 	if err := startupDB.Ping(); err != nil {

@@ -20,27 +20,19 @@ import (
 	"github.com/soner3/flora"
 )
 
-// ---------------------------------------------------------
-// 1. The Interface
-// ---------------------------------------------------------
+// =========================================================
+// EXAMPLE 1: MULTI-BINDING WITH INTERFACES
+// =========================================================
+
 type Plugin interface {
 	Execute()
 }
 
-// ---------------------------------------------------------
-// 2. The Implementations (Plugins)
-// ---------------------------------------------------------
-
-// We use the "order" tag to tell Flora exactly in which position
-// this plugin should appear in the slice.
 type LoggerPlugin struct {
 	flora.Component `flora:"order=1"` // This should run first
 }
 
-func NewLoggerPlugin() *LoggerPlugin {
-	return &LoggerPlugin{}
-}
-
+func NewLoggerPlugin() *LoggerPlugin { return &LoggerPlugin{} }
 func (p *LoggerPlugin) Execute() {
 	fmt.Println("   [1] LoggerPlugin: Setting up logging...")
 }
@@ -49,34 +41,64 @@ type MetricsPlugin struct {
 	flora.Component `flora:"order=2"` // This should run second
 }
 
-func NewMetricsPlugin() *MetricsPlugin {
-	return &MetricsPlugin{}
-}
-
+func NewMetricsPlugin() *MetricsPlugin { return &MetricsPlugin{} }
 func (p *MetricsPlugin) Execute() {
 	fmt.Println("   [2] MetricsPlugin: Starting metrics collection...")
 }
 
-// ---------------------------------------------------------
-// 3. The Consumer
-// ---------------------------------------------------------
 type PluginManager struct {
 	flora.Component
-
-	// We don't ask for a single Plugin, we ask for a SLICE of Plugins!
-	plugins []Plugin
+	plugins []Plugin // Flora bundles all structs that implement 'Plugin'
 }
 
-// Flora scans the entire codebase, finds both LoggerPlugin and MetricsPlugin,
-// bundles them into a slice, sorts them by their "order" tag, and injects them here.
 func NewPluginManager(plugins []Plugin) *PluginManager {
 	return &PluginManager{plugins: plugins}
 }
 
 func (m *PluginManager) RunAll() {
-	fmt.Printf("-> PluginManager automatically discovered %d plugins.\n", len(m.plugins))
-
+	fmt.Printf("-> PluginManager automatically discovered %d interface plugins.\n", len(m.plugins))
 	for _, p := range m.plugins {
-		p.Execute() // They will be executed in the exact order we defined!
+		p.Execute()
+	}
+}
+
+// =========================================================
+// EXAMPLE 2: MULTI-BINDING WITH CONCRETE POINTERS/STRUCTS
+// =========================================================
+
+// A standard struct (not an interface!)
+type Route struct {
+	Path   string
+	Method string
+}
+
+// A configuration that provides multiple instances of the same type
+type RouteConfig struct {
+	flora.Configuration
+}
+
+// flora:name=homeRoute, order=1
+func (c *RouteConfig) ProvideHomeRoute() *Route {
+	return &Route{Path: "/", Method: "GET"}
+}
+
+// flora:name=apiRoute, order=2
+func (c *RouteConfig) ProvideApiRoute() *Route {
+	return &Route{Path: "/api/v1/users", Method: "POST"}
+}
+
+type Router struct {
+	flora.Component
+	routes []*Route // Flora bundles all concrete *Route pointers here!
+}
+
+func NewRouter(routes []*Route) *Router {
+	return &Router{routes: routes}
+}
+
+func (r *Router) PrintRoutes() {
+	fmt.Printf("-> Router automatically discovered %d concrete routes.\n", len(r.routes))
+	for _, rt := range r.routes {
+		fmt.Printf("   Route: [%s] %s\n", rt.Method, rt.Path)
 	}
 }

@@ -11,13 +11,19 @@ package main
 func InitializeContainer() (*FloraContainer, func(), error) {
 	loggerPlugin := NewLoggerPlugin()
 	metricsPlugin := NewMetricsPlugin()
-	v := ProvideSliceOfPlugin(loggerPlugin, metricsPlugin)
+	v := ProvideSliceOfMain_Plugin(loggerPlugin, metricsPlugin)
 	pluginManager := NewPluginManager(v)
+	floraQualifier_homeRoute := ProvideWrapper_RouteConfig_ProvideHomeRoute()
+	floraQualifier_apiRoute := ProvideWrapper_RouteConfig_ProvideApiRoute()
+	v2 := ProvideSliceOfPtr_main_Route(floraQualifier_homeRoute, floraQualifier_apiRoute)
+	router := NewRouter(v2)
 	floraContainer := &FloraContainer{
 		LoggerPlugin:  loggerPlugin,
 		MetricsPlugin: metricsPlugin,
 		PluginManager: pluginManager,
-		SliceOfPlugin: v,
+		HomeRoute:     floraQualifier_homeRoute,
+		ApiRoute:      floraQualifier_apiRoute,
+		Router:        router,
 	}
 	return floraContainer, func() {
 	}, nil
@@ -25,9 +31,39 @@ func InitializeContainer() (*FloraContainer, func(), error) {
 
 // flora_injector.go:
 
-func ProvideSliceOfPlugin(p0 *LoggerPlugin, p1 *MetricsPlugin) []Plugin {
+type FloraQualifier_apiRoute *Route
+
+type FloraQualifier_homeRoute *Route
+
+func ProvideWrapper_RouteConfig_ProvideHomeRoute() FloraQualifier_homeRoute {
+
+	flora_cfg_struct := RouteConfig{}
+
+	val := flora_cfg_struct.ProvideHomeRoute()
+
+	return FloraQualifier_homeRoute(val)
+
+}
+
+func ProvideWrapper_RouteConfig_ProvideApiRoute() FloraQualifier_apiRoute {
+
+	flora_cfg_struct := RouteConfig{}
+
+	val := flora_cfg_struct.ProvideApiRoute()
+
+	return FloraQualifier_apiRoute(val)
+
+}
+
+func ProvideSliceOfMain_Plugin(p0 *LoggerPlugin, p1 *MetricsPlugin) []Plugin {
 	return []Plugin{
-		p0, p1,
+		(*LoggerPlugin)(p0), (*MetricsPlugin)(p1),
+	}
+}
+
+func ProvideSliceOfPtr_main_Route(p0 FloraQualifier_homeRoute, p1 FloraQualifier_apiRoute) []*Route {
+	return []*Route{
+		(*Route)(p0), (*Route)(p1),
 	}
 }
 
@@ -38,5 +74,9 @@ type FloraContainer struct {
 
 	PluginManager *PluginManager
 
-	SliceOfPlugin []Plugin
+	HomeRoute FloraQualifier_homeRoute
+
+	ApiRoute FloraQualifier_apiRoute
+
+	Router *Router
 }

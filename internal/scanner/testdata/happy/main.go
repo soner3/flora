@@ -15,7 +15,11 @@ limitations under the License.
 */
 package happy
 
-import "github.com/soner3/flora"
+import (
+	"os"
+
+	"github.com/soner3/flora"
+)
 
 type Iface interface{ Do() }
 
@@ -84,3 +88,9 @@ type CleanConfig struct {
 
 // flora:primary
 func (c *CleanConfig) ProvideDB() string { return "" }
+
+type LocalType struct{}
+
+type Service struct{ flora.Component }
+
+func NewService(f *os.File, loc LocalType) *Service { return nil }

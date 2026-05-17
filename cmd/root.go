@@ -39,9 +39,8 @@ var readBuildInfoFunc = debug.ReadBuildInfo
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:     "flora",
-	Version: fmt.Sprintf("%s, build %s", Version, Build),
-	Short:   "Compile-time Dependency Injection for Go",
+	Use:   "flora",
+	Short: "Compile-time Dependency Injection for Go",
 	Long: `Flora is a powerful, reflection-free Dependency Injection framework for Go.
 
 By analyzing your codebase for '@Component' and '@Configuration' tags, 
@@ -72,7 +71,9 @@ func Execute() {
 func init() {
 	setupBuildInfo()
 
+	rootCmd.Version = fmt.Sprintf("%s, build %s", Version, Build)
 	rootCmd.SetVersionTemplate("Flora version {{.Version}}\n")
+
 	rootCmd.PersistentFlags().StringVarP(&logLevel, "log-level", "l", "info", "Log level (debug, info, warn, error)")
 }
 
@@ -110,9 +111,9 @@ func setupLogger(cmd *cobra.Command) {
 func setupBuildInfo() {
 	if Build == "unknown" {
 		if info, ok := readBuildInfoFunc(); ok && info != nil {
-
 			if info.Main.Version != "" && info.Main.Version != "(devel)" {
 				Version = info.Main.Version
+				Build = "release"
 			}
 
 			for _, setting := range info.Settings {
@@ -125,7 +126,9 @@ func setupBuildInfo() {
 				}
 
 				if setting.Key == "vcs.modified" && setting.Value == "true" {
-					Build += "-dirty"
+					if !strings.HasSuffix(Build, "-dirty") {
+						Build += "-dirty"
+					}
 				}
 			}
 		}

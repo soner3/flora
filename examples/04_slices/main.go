@@ -25,8 +25,13 @@ func main() {
 
 	fmt.Println("-------------------------------------------------")
 
-	// Run the fully wired PluginManager
+	// 1. Run the Interface-based Slice
 	container.PluginManager.RunAll()
+
+	fmt.Println("-------------------------------------------------")
+
+	// 2. Run the Pointer-based Slice
+	container.Router.PrintRoutes()
 
 	fmt.Println("-------------------------------------------------")
 }
