@@ -8,14 +8,13 @@ package main
 
 import (
 	"database/sql"
-	"net/http"
-
 	"github.com/soner3/flora/examples/99_webapp/config"
 	"github.com/soner3/flora/examples/99_webapp/controller"
 	"github.com/soner3/flora/examples/99_webapp/infrastructure"
 	"github.com/soner3/flora/examples/99_webapp/middleware"
 	"github.com/soner3/flora/examples/99_webapp/repository"
 	"github.com/soner3/flora/examples/99_webapp/service"
+	"net/http"
 )
 
 // Injectors from flora_injector.go:
@@ -149,15 +148,15 @@ func ProvideBinding_BookRepository_As_BookRepository(val *repository.BookReposit
 	return (*repository.BookRepository)(val)
 }
 
-func ProvideSliceOfMiddleware_Middleware(p0 FloraQualifier_ProvideLogger, p1 FloraQualifier_ProvideAuth) []middleware.Middleware {
-	return []middleware.Middleware{
-		(middleware.Middleware)(p0), (middleware.Middleware)(p1),
-	}
-}
-
 func ProvideSliceOfController_Controller(p0 *controller.BookHandler, p1 *controller.HelloHandler) []controller.Controller {
 	return []controller.Controller{
 		(*controller.BookHandler)(p0), (*controller.HelloHandler)(p1),
+	}
+}
+
+func ProvideSliceOfMiddleware_Middleware(p0 FloraQualifier_ProvideLogger, p1 FloraQualifier_ProvideAuth) []middleware.Middleware {
+	return []middleware.Middleware{
+		(middleware.Middleware)(p0), (middleware.Middleware)(p1),
 	}
 }
 

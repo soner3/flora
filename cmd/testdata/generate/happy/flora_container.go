@@ -19,14 +19,14 @@ func InitializeContainer() (*FloraContainer, func(), error) {
 	myRouter := ProvideWrapper_WebConfig_ProvideRouter()
 	server := NewServer(myRouter)
 	floraContainer := &FloraContainer{
-		A:            a,
-		BFactory:     v,
-		C:            c,
-		string:       string2,
-		CleanService: cleanService,
-		Consumer:     consumer,
-		Server:       server,
-		MyRouter:     myRouter,
+		A:             a,
+		BFactory:      v,
+		C:             c,
+		ProvideDB:     string2,
+		CleanService:  cleanService,
+		Consumer:      consumer,
+		Server:        server,
+		ProvideRouter: myRouter,
 	}
 	return floraContainer, func() {
 	}, nil
@@ -73,7 +73,7 @@ type FloraContainer struct {
 
 	C *C
 
-	string string
+	ProvideDB string
 
 	CleanService *CleanService
 
@@ -81,5 +81,5 @@ type FloraContainer struct {
 
 	Server *Server
 
-	MyRouter MyRouter
+	ProvideRouter MyRouter
 }
