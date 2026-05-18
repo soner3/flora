@@ -12,7 +12,7 @@
     <a href="https://pkg.go.dev/github.com/soner3/flora"><img src="https://pkg.go.dev/badge/github.com/soner3/flora.svg" alt="Go Reference"></a>
     <a href="https://github.com/soner3/flora/releases"><img src="https://img.shields.io/github/v/release/soner3/flora" alt="GitHub Release"></a>
     <a href="https://github.com/soner3/flora"><img src="https://img.shields.io/github/go-mod/go-version/soner3/flora" alt="Go Version"></a>
-    <a href="https://github.com/soner3/flora/actions"><img src="https://img.shields.io/github/actions/workflow/status/soner3/flora/release.yml?branch=master" alt="Build Status"></a>
+    <a href="https://github.com/soner3/flora/actions"><img src="https://img.shields.io/github/actions/workflow/status/soner3/flora/release.yml" alt="Build Status"></a>
     <a href="https://goreportcard.com/report/github.com/soner3/flora"><img src="https://goreportcard.com/badge/github.com/soner3/flora" alt="Go Report Card"></a>
     <img src="https://img.shields.io/badge/Coverage-100%25-brightgreen.svg" alt="Test Coverage">
     <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"></a>
