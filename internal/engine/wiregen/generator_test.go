@@ -556,6 +556,89 @@ func TestGenerate(t *testing.T) {
 			},
 			expErr: ErrWireExecution,
 		},
+		{
+			name: "TestComponentImplementsMainInterfaceLeak",
+			setupDir: func(t *testing.T) string {
+				return t.TempDir()
+			},
+			genCtx: &engine.GeneratorContext{
+				Components: []*engine.ComponentMetadata{
+					{
+						PackageName:     "handler",
+						PackagePath:     "github.com/test/internal/handler",
+						StructName:      "TodoHandler",
+						ConstructorName: "NewTodoHandler",
+						Implements: []engine.TypeMetadata{
+							{
+								PackageName: "main",
+								PackagePath: "github.com/test/main",
+								TypeName:    "Controller",
+							},
+						},
+					},
+				},
+			},
+			expErr: ErrMainInterfaceLeak,
+		},
+		{
+			name: "TestSliceBindingMainInterfaceLeak",
+			setupDir: func(t *testing.T) string {
+				return t.TempDir()
+			},
+			genCtx: &engine.GeneratorContext{
+				SliceBindings: []*engine.SliceBindingMetadata{
+					{
+						Type: engine.TypeMetadata{
+							PackageName: "main",
+							PackagePath: "github.com/test/main",
+							TypeName:    "Controller",
+						},
+						Implementations: []*engine.ComponentMetadata{
+							{
+								PackageName:     "handler",
+								PackagePath:     "github.com/test/internal/handler",
+								StructName:      "TodoHandler",
+								ConstructorName: "NewTodoHandler",
+							},
+						},
+					},
+				},
+			},
+			expErr: ErrMainInterfaceLeak,
+		},
+		{
+			name: "TestSliceInterfaceInMainButContainerInSubpkgLeak",
+			setupDir: func(t *testing.T) string {
+				tmpDir, err := os.MkdirTemp(".", "flora_test_out_*")
+				if err != nil {
+					t.Fatal(err)
+				}
+				dummyFile := filepath.Join(tmpDir, "dummy.go")
+				os.WriteFile(dummyFile, []byte("package subpkg\n"), 0644)
+				return tmpDir
+			},
+			genCtx: &engine.GeneratorContext{
+				Components: []*engine.ComponentMetadata{},
+				SliceBindings: []*engine.SliceBindingMetadata{
+					{
+						Type: engine.TypeMetadata{
+							PackageName: "main",
+							PackagePath: "github.com/test/main",
+							TypeName:    "Controller",
+						},
+						Implementations: []*engine.ComponentMetadata{
+							{
+								PackageName:     "main",
+								PackagePath:     "github.com/test/main",
+								StructName:      "TodoHandler",
+								ConstructorName: "NewTodoHandler",
+							},
+						},
+					},
+				},
+			},
+			expErr: ErrMainInterfaceLeak,
+		},
 	}
 
 	for _, tc := range testcases {

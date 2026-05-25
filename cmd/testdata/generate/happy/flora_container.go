@@ -10,7 +10,7 @@ package happy
 
 func InitializeContainer() (*FloraContainer, func(), error) {
 	a := NewA()
-	v := ProvideWrapper_BuildB()
+	v := ProvidePrototype_BuildB()
 	c := NewC()
 	string2 := ProvideWrapper_CleanConfig_ProvideDB()
 	cleanService := NewCleanService()
@@ -34,7 +34,7 @@ func InitializeContainer() (*FloraContainer, func(), error) {
 
 // flora_injector.go:
 
-func ProvideWrapper_BuildB() func() *B {
+func ProvidePrototype_BuildB() func() *B {
 	return func() *B {
 
 		return BuildB()

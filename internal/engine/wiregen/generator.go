@@ -463,11 +463,15 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 		}
 
 		for _, iface := range comp.Implements {
+			if iface.PackageName == "main" {
+				if comp.PackageName != "main" {
+					return errs.Wrap(ErrMainInterfaceLeak, "interface '%s' belongs to package 'main', but component '%s' is in package '%s'. Go forbids subpackages from importing main. Please move the interface to an internal package.",
+						iface.TypeName, comp.StructName, comp.PackageName)
+				}
+
+			}
 			ifacePrefix := ""
 			if iface.PackageName != pkgName {
-				if iface.PackageName == "main" {
-					return errs.Wrap(ErrMainInterfaceLeak, "type belongs to package 'main' (Go forbids importing main)")
-				}
 				ifacePrefix = iface.PackageName + "."
 				importSet[iface.PackagePath] = true
 			}
@@ -498,7 +502,7 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 					WrapperName:   bWrapperName,
 					ParamType:     finalReturnType,
 					OriginalType:  retType,
-					InterfaceType: ifacePrefix + iface.TypeName, // HIER auch
+					InterfaceType: ifacePrefix + iface.TypeName,
 				})
 			}
 		}
@@ -541,7 +545,19 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 			return cmp.Compare(a.Order, b.Order)
 		})
 
-		if sb.Type.PackagePath != "" && sb.Type.PackageName != pkgName && sb.Type.PackageName != "main" {
+		if sb.Type.PackageName == "main" {
+			for _, impl := range sb.Implementations {
+				if impl.PackageName != "main" {
+					return errs.Wrap(ErrMainInterfaceLeak, "slice interface '%s' belongs to package 'main', but component '%s' is in package '%s'. Go forbids subpackages from importing main. Please move the interface to an internal package.",
+						sb.Type.TypeName, impl.StructName, impl.PackageName)
+				}
+			}
+			if pkgName != "main" {
+				return errs.Wrap(ErrMainInterfaceLeak, "slice interface belongs to package 'main' (Go forbids importing main)")
+			}
+		}
+
+		if sb.Type.PackagePath != "" && sb.Type.PackageName != pkgName {
 			importSet[sb.Type.PackagePath] = true
 		}
 

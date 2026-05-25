@@ -63,10 +63,6 @@ Features:
 			return err
 		}
 
-		if err := validateDir(outputDir, "output"); err != nil {
-			return err
-		}
-
 		if watch {
 			log.Debug("Watch flag is enabled")
 			if err := validateDir(watchDir, "watch-dir"); err != nil {
@@ -100,7 +96,7 @@ func validateDir(dir string, flagName string) error {
 func init() {
 	rootCmd.AddCommand(generateCmd)
 	generateCmd.Flags().StringVarP(&inputDir, "input", "i", ".", "Input directory to scan")
-	generateCmd.Flags().StringVarP(&outputDir, "output", "o", "flora", "Output directory for the generated container")
+	generateCmd.Flags().StringVarP(&outputDir, "output", "o", ".", "Output directory for the generated container")
 	generateCmd.Flags().BoolVarP(&watch, "watch", "w", false, "Watch for file changes and regenerate the container automatically")
 	generateCmd.Flags().StringVarP(&watchDir, "watch-dir", "d", ".", "Directory to watch for file changes")
 }

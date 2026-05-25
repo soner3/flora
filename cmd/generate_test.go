@@ -30,18 +30,6 @@ func TestGenerateCmd(t *testing.T) {
 			expErr:      true,
 		},
 		{
-			name:        "TestInvalidOutputDirectory",
-			args:        []string{"gen", "-i", "./testdata/generate/happy", "-o", "./invalid"},
-			expectedOut: "invalid directory provided for flag 'output':",
-			expErr:      true,
-		},
-		{
-			name:        "TestInvalidOutputDirectoryNotADirectory",
-			args:        []string{"gen", "-i", "./testdata/generate/happy", "-o", "./root.go"},
-			expectedOut: "invalid path provided for flag 'output':",
-			expErr:      true,
-		},
-		{
 			name:        "TestInvalidWatchDirectory",
 			args:        []string{"gen", "-i", "./testdata/generate/happy", "-o", "./testdata/generate/happy", "-w", "-d", "./invalid"},
 			expectedOut: "invalid directory provided for flag 'watch-dir':",
