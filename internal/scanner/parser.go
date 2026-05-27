@@ -482,19 +482,14 @@ func validateProviderFunc(compInfo *componentInfo, metadata *engine.ComponentMet
 	}
 
 	if metadata.QualifierName == "" {
-		pkgLower := strings.ToLower(metadata.PackageName)
-		structLower := strings.ToLower(metadata.StructName)
+		pkgName := metadata.PackageName
+		structName := metadata.StructName
 
 		if metadata.ConfigMethodName != "" {
 			methodName := metadata.ConfigMethodName
-			if len(methodName) > 0 {
-				r := []rune(methodName)
-				r[0] = unicode.ToLower(r[0])
-				methodName = string(r)
-			}
-			metadata.QualifierName = fmt.Sprintf("%s_%s_%s", pkgLower, structLower, methodName)
+			metadata.QualifierName = fmt.Sprintf("%s_%s_%s", pkgName, structName, methodName)
 		} else {
-			metadata.QualifierName = fmt.Sprintf("%s_%s", pkgLower, structLower)
+			metadata.QualifierName = fmt.Sprintf("%s_%s", pkgName, structName)
 		}
 	}
 

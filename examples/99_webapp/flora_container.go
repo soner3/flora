@@ -31,14 +31,14 @@ func InitializeContainer() (*FloraContainer, func(), error) {
 		return nil, nil, err
 	}
 	bookRepository := ProvideWrapper_NewBookRepository(floraQualifier_masterDB, floraQualifier_replicaDB)
-	serviceBookRepository := ProvideBinding_BookRepository_As_BookRepository(bookRepository)
+	serviceBookRepository := ProvideBinding_repository_BookRepository_As_BookRepository(bookRepository)
 	bookService := service.ProvideBookService(serviceBookRepository)
 	bookHandler := controller.NewBookHandler(bookService)
 	helloHandler := controller.NewHelloHandler()
-	floraQualifier_ProvideLogger := ProvideWrapper_MiddlewareConfig_ProvideLogger()
-	floraQualifier_ProvideAuth := ProvideWrapper_MiddlewareConfig_ProvideAuth(bookRepository)
+	floraQualifier_middleware_Middleware_ProvideLogger := ProvideWrapper_MiddlewareConfig_ProvideLogger()
+	floraQualifier_middleware_Middleware_ProvideAuth := ProvideWrapper_MiddlewareConfig_ProvideAuth(bookRepository)
 	v := ProvideSliceOfController_Controller(bookHandler, helloHandler)
-	v2 := ProvideSliceOfMiddleware_Middleware(floraQualifier_ProvideLogger, floraQualifier_ProvideAuth)
+	v2 := ProvideSliceOfMiddleware_Middleware(floraQualifier_middleware_Middleware_ProvideLogger, floraQualifier_middleware_Middleware_ProvideAuth)
 	handler := ProvideWrapper_WebConfig_ProvideRouter(v, v2)
 	server, cleanup3, err := ProvideWrapper_WebConfig_ProvideServer(appConfig, handler, floraQualifier_masterDB)
 	if err != nil {
@@ -47,17 +47,17 @@ func InitializeContainer() (*FloraContainer, func(), error) {
 		return nil, nil, err
 	}
 	floraContainer := &FloraContainer{
-		AppConfig:      appConfig,
-		BookRepository: bookRepository,
-		BookService:    bookService,
-		BookHandler:    bookHandler,
-		HelloHandler:   helloHandler,
-		MasterDB:       floraQualifier_masterDB,
-		ReplicaDB:      floraQualifier_replicaDB,
-		ProvideLogger:  floraQualifier_ProvideLogger,
-		ProvideAuth:    floraQualifier_ProvideAuth,
-		ProvideRouter:  handler,
-		Server:         server,
+		Config_AppConfig:                    appConfig,
+		Repository_BookRepository:           bookRepository,
+		Service_BookService:                 bookService,
+		Controller_BookHandler:              bookHandler,
+		Controller_HelloHandler:             helloHandler,
+		MasterDB:                            floraQualifier_masterDB,
+		ReplicaDB:                           floraQualifier_replicaDB,
+		Middleware_Middleware_ProvideLogger: floraQualifier_middleware_Middleware_ProvideLogger,
+		Middleware_Middleware_ProvideAuth:   floraQualifier_middleware_Middleware_ProvideAuth,
+		Http_Handler_ProvideRouter:          handler,
+		Server:                              server,
 	}
 	return floraContainer, func() {
 		cleanup3()
@@ -68,11 +68,11 @@ func InitializeContainer() (*FloraContainer, func(), error) {
 
 // flora_injector.go:
 
-type FloraQualifier_ProvideAuth middleware.Middleware
-
-type FloraQualifier_ProvideLogger middleware.Middleware
-
 type FloraQualifier_masterDB *sql.DB
+
+type FloraQualifier_middleware_Middleware_ProvideAuth middleware.Middleware
+
+type FloraQualifier_middleware_Middleware_ProvideLogger middleware.Middleware
 
 type FloraQualifier_replicaDB *sql.DB
 
@@ -104,23 +104,23 @@ func ProvideWrapper_DBConfig_ProvideReplicaDB(cfg *config.AppConfig) (FloraQuali
 
 }
 
-func ProvideWrapper_MiddlewareConfig_ProvideLogger() FloraQualifier_ProvideLogger {
+func ProvideWrapper_MiddlewareConfig_ProvideLogger() FloraQualifier_middleware_Middleware_ProvideLogger {
 
 	flora_cfg_struct := middleware.MiddlewareConfig{}
 
 	val := flora_cfg_struct.ProvideLogger()
 
-	return FloraQualifier_ProvideLogger(val)
+	return FloraQualifier_middleware_Middleware_ProvideLogger(val)
 
 }
 
-func ProvideWrapper_MiddlewareConfig_ProvideAuth(repo *repository.BookRepository) FloraQualifier_ProvideAuth {
+func ProvideWrapper_MiddlewareConfig_ProvideAuth(repo *repository.BookRepository) FloraQualifier_middleware_Middleware_ProvideAuth {
 
 	flora_cfg_struct := middleware.MiddlewareConfig{}
 
 	val := flora_cfg_struct.ProvideAuth(repo)
 
-	return FloraQualifier_ProvideAuth(val)
+	return FloraQualifier_middleware_Middleware_ProvideAuth(val)
 
 }
 
@@ -144,42 +144,44 @@ func ProvideWrapper_WebConfig_ProvideServer(cfg *config.AppConfig, handler http.
 
 }
 
-func ProvideBinding_BookRepository_As_BookRepository(val *repository.BookRepository) service.BookRepository {
-	return (*repository.BookRepository)(val)
+func ProvideBinding_repository_BookRepository_As_BookRepository(val *repository.BookRepository) service.BookRepository {
+
+	return val
+
 }
 
 func ProvideSliceOfController_Controller(p0 *controller.BookHandler, p1 *controller.HelloHandler) []controller.Controller {
 	return []controller.Controller{
-		(*controller.BookHandler)(p0), (*controller.HelloHandler)(p1),
+		p0, p1,
 	}
 }
 
-func ProvideSliceOfMiddleware_Middleware(p0 FloraQualifier_ProvideLogger, p1 FloraQualifier_ProvideAuth) []middleware.Middleware {
+func ProvideSliceOfMiddleware_Middleware(p0 FloraQualifier_middleware_Middleware_ProvideLogger, p1 FloraQualifier_middleware_Middleware_ProvideAuth) []middleware.Middleware {
 	return []middleware.Middleware{
 		(middleware.Middleware)(p0), (middleware.Middleware)(p1),
 	}
 }
 
 type FloraContainer struct {
-	AppConfig *config.AppConfig
+	Config_AppConfig *config.AppConfig
 
-	BookRepository *repository.BookRepository
+	Repository_BookRepository *repository.BookRepository
 
-	BookService *service.BookService
+	Service_BookService *service.BookService
 
-	BookHandler *controller.BookHandler
+	Controller_BookHandler *controller.BookHandler
 
-	HelloHandler *controller.HelloHandler
+	Controller_HelloHandler *controller.HelloHandler
 
 	MasterDB FloraQualifier_masterDB
 
 	ReplicaDB FloraQualifier_replicaDB
 
-	ProvideLogger FloraQualifier_ProvideLogger
+	Middleware_Middleware_ProvideLogger FloraQualifier_middleware_Middleware_ProvideLogger
 
-	ProvideAuth FloraQualifier_ProvideAuth
+	Middleware_Middleware_ProvideAuth FloraQualifier_middleware_Middleware_ProvideAuth
 
-	ProvideRouter http.Handler
+	Http_Handler_ProvideRouter http.Handler
 
 	Server *http.Server
 }

@@ -145,7 +145,11 @@ func {{.WrapperName}}({{range $index, $param := .Params}}{{if $index}}, {{end}}{
 
 {{range .Bindings}}
 func {{.WrapperName}}(val {{.ParamType}}) {{.InterfaceType}} {
+    {{if .NeedsCast}}
     return ({{.OriginalType}})(val)
+    {{else}}
+    return val
+    {{end}}
 }
 {{end}}
 
@@ -171,7 +175,7 @@ func {{.WrapperName}}(factory {{.ParamType}}) func() ({{.InterfaceType}}{{if .Ha
 {{range .SliceBindings}}
 func ProvideSliceOf{{.InterfaceName}}({{range $index, $impl := .Implementations}}{{if $index}}, {{end}}{{$impl.ParamName}} {{$impl.ParamType}}{{end}}) []{{.InterfaceType}} {
     return []{{.InterfaceType}}{
-        {{range .Implementations}}({{.OriginalType}})({{.ParamName}}),{{end}}
+        {{range .Implementations}}{{if .NeedsCast}}({{.OriginalType}})({{.ParamName}}),{{else}}{{.ParamName}},{{end}}{{end}}
     }
 }
 {{end}}
@@ -242,6 +246,7 @@ type bindingData struct {
 	ParamType     string
 	OriginalType  string
 	InterfaceType string
+	NeedsCast     bool
 }
 
 type prototypeBindingData struct {
@@ -256,6 +261,7 @@ type sliceImplData struct {
 	ParamName    string
 	ParamType    string
 	OriginalType string
+	NeedsCast    bool
 }
 
 type sliceBindingData struct {
@@ -503,6 +509,7 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 					ParamType:     finalReturnType,
 					OriginalType:  retType,
 					InterfaceType: ifacePrefix + iface.TypeName,
+					NeedsCast:     needsProviderAlias,
 				})
 			}
 		}
@@ -589,6 +596,7 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 				ParamName:    fmt.Sprintf("p%d", i),
 				ParamType:    paramType,
 				OriginalType: implRetType,
+				NeedsCast:    implNeedsAlias,
 			})
 		}
 
