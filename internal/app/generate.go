@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/soner3/flora/internal/engine"
 	"github.com/soner3/flora/internal/engine/wiregen"
 	"github.com/soner3/flora/internal/errs"
 	"github.com/soner3/flora/internal/scanner"
@@ -100,7 +101,7 @@ func WithContainerStub(outputDir string, operation func() error) (err error) {
 
 	containerPath := filepath.Join(absOutDir, wiregen.ContainerFileName)
 
-	pkgName := strings.ReplaceAll(filepath.Base(absOutDir), "-", "_")
+	pkgName := engine.ResolvePackageName(absOutDir)
 
 	var backupContent []byte
 	backupContent, _ = os.ReadFile(containerPath)

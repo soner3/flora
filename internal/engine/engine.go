@@ -15,6 +15,12 @@ limitations under the License.
 */
 package engine
 
+import (
+	"go/build"
+	"path/filepath"
+	"strings"
+)
+
 type TypeMetadata struct {
 	PackageName string
 	PackagePath string
@@ -61,4 +67,15 @@ type GeneratorContext struct {
 
 type Generator interface {
 	Generate(targetDir string, genCtx *GeneratorContext) error
+}
+
+// ResolvePackageName figures out the package name of the output directory.
+func ResolvePackageName(absOutDir string) string {
+	pkgName := strings.ReplaceAll(filepath.Base(absOutDir), "-", "_")
+	if buildPkg, err := build.Default.ImportDir(absOutDir, 0); err == nil {
+		pkgName = buildPkg.Name
+	} else if pkgName == "." || pkgName == "/" {
+		pkgName = "main"
+	}
+	return pkgName
 }

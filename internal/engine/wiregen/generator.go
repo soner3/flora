@@ -20,7 +20,6 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
-	"go/build"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -316,14 +315,7 @@ func (g *WireGenerator) Generate(outDir string, genCtx *engine.GeneratorContext)
 		return errs.Wrap(chainErr, "absolute path: %s", absOutDir)
 	}
 
-	pkgName := filepath.Base(absOutDir)
-	pkgName = strings.ReplaceAll(pkgName, "-", "_")
-
-	if buildPkg, err := build.Default.ImportDir(absOutDir, 0); err == nil {
-		pkgName = buildPkg.Name
-	} else if pkgName == "." || pkgName == "/" {
-		pkgName = "main"
-	}
+	pkgName := engine.ResolvePackageName(absOutDir)
 
 	var generatedPkgPath string
 	for _, comp := range genCtx.Components {
