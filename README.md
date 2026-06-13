@@ -112,16 +112,16 @@ Use this for structs that you own and write yourself (e.g., Services, Handlers, 
 **Tag Reference:**
 You can override the default behavior using the `flora` struct tag. Multiple tags can be combined using commas.
 
-| Tag           | Example                        | Description                                                                                                   |
-| ------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| _(Shorthand)_ | `flora:"BuildApp"`             | Any string without a key-value pair is automatically treated as the `constructor` name.                       |
-| `constructor` | `flora:"constructor=BuildApp"` | Explicitly overrides the default `New<StructName>` constructor lookup.                                        |
-| `primary`     | `flora:"primary"`              | Resolves interface collisions. If multiple structs implement the same interface, the primary one is injected. |
-| `scope`       | `flora:"scope=prototype"`      | Changes the lifecycle to a Factory function (a fresh instance is created per injection).                      |
-| `order`       | `flora:"order=1"`              | Defines the sorting order when the component is injected via Slice (`[]Type`).                                |
-| `name`        | `flora:"name=masterDB"`        | Assigns a specific qualifier name to this component to resolve duplicate types.                               |
-| `inject`      | `flora:"inject(db=masterDB)"`  | Injects a specifically named dependency (qualifier) into a named parameter of the constructor.                |
-| _(Empty)_     | `flora:""`                     | Explicitly marks a component with default rules (optional, embedding the struct is usually enough).           |
+| Tag           | Example                        | Description                                                                                                                                       |
+| ------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| _(Shorthand)_ | `flora:"BuildApp"`             | Any string without a key-value pair is automatically treated as the `constructor` name.                                                           |
+| `constructor` | `flora:"constructor=BuildApp"` | Explicitly overrides the default `New<StructName>` constructor lookup.                                                                            |
+| `primary`     | `flora:"primary"`              | Resolves interface collisions. If multiple structs implement the same interface, the primary one is injected.                                     |
+| `scope`       | `flora:"scope=prototype"`      | Changes the lifecycle to a Factory function (a fresh instance is created per injection).                                                          |
+| `order`       | `flora:"order=1"`              | Defines the sorting order when the component is injected via Slice (`[]Type`).                                                                    |
+| `name`        | `flora:"name=masterDB"`        | Assigns a specific qualifier name to this component to resolve duplicate. The default qualifier is the struct's package name + "\_" + structName. |
+| `inject`      | `flora:"inject(db=masterDB)"`  | Injects a specifically named dependency (qualifier) into a named parameter of the constructor.                                                    |
+| _(Empty)_     | `flora:""`                     | Explicitly marks a component with default rules (optional, embedding the struct is usually enough).                                               |
 
 ### 2. `flora.Configuration` (For Third-Party & Adapters)
 
@@ -158,13 +158,13 @@ func (c *DatabaseConfig) ProvidePostgres() (*sql.DB, func(), error) {
 **Magic Comment Reference:**
 Because Go does not allow struct tags on functions, Flora reads the comments immediately preceding the provider method.
 
-| Comment                           | Description                                                                                |
-| --------------------------------- | ------------------------------------------------------------------------------------------ |
-| `// flora:primary`                | Marks the returned type as the primary implementation.                                     |
-| `// flora:scope=prototype`        | Changes the lifecycle to a Factory function.                                               |
-| `// flora:order=1`                | Defines the sorting order when injected via Slice (`[]Type`).                              |
-| `// flora:name=primaryDB`         | Assigns a specific qualifier name to this provider to resolve duplicate types.             |
-| `// flora:inject(conn=primaryDB)` | Injects a specifically named dependency (qualifier) into a named parameter of this method. |
+| Comment                           | Description                                                                                                                                    |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `// flora:primary`                | Marks the returned type as the primary implementation.                                                                                         |
+| `// flora:scope=prototype`        | Changes the lifecycle to a Factory function.                                                                                                   |
+| `// flora:order=1`                | Defines the sorting order when injected via Slice (`[]Type`).                                                                                  |
+| `// flora:name=primaryDB`         | Assigns a specific qualifier name to this provider to resolve duplicate types. The default name is the config's name + "\_" + provider's name. |
+| `// flora:inject(conn=primaryDB)` | Injects a specifically named dependency (qualifier) into a named parameter of this method.                                                     |
 
 ---
 
