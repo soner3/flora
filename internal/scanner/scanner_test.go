@@ -42,8 +42,8 @@ func TestScanPackages(t *testing.T) {
 		{
 			name:     "TestScanPackagesCompileError",
 			path:     "testdata/sad",
-			expected: 0,
-			expErr:   ErrCompile,
+			expected: 1,
+			expErr:   nil,
 		},
 	}
 

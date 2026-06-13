@@ -53,8 +53,7 @@ func ScanPackages(rootDir string) ([]*packages.Package, error) {
 	var validPkgs []*packages.Package
 	for _, pkg := range pkgs {
 		if len(pkg.Errors) > 0 {
-			chainErr := fmt.Errorf("%w: %w", ErrCompile, pkg.Errors[0])
-			return nil, errs.Wrap(chainErr, "package ID: %s", pkg.ID)
+			log.Warn("Package has errors, but continuing scan (may be caused by outdated container)", "pkg", pkg.ID, "errors", pkg.Errors)
 		}
 
 		validPkgs = append(validPkgs, pkg)

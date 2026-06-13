@@ -38,6 +38,12 @@ func TestRunGenerate(t *testing.T) {
 			name:    "TestScanError",
 			dir:     "./testdata/scan_err",
 			outDir:  t.TempDir(),
+			wantErr: false,
+		},
+		{
+			name:    "TestLoadError",
+			dir:     "./testdata/foo",
+			outDir:  t.TempDir(),
 			wantErr: true,
 		},
 		{
@@ -285,7 +291,6 @@ func TestRunWatch_MockedChannels(t *testing.T) {
 	}
 }
 
-
 func TestWithContainerStub(t *testing.T) {
 	containerFile := wiregen.ContainerFileName
 
@@ -318,6 +323,15 @@ func TestWithContainerStub(t *testing.T) {
 			},
 			wantErr:     true,
 			wantContent: "original backup",
+		},
+		{
+			name:           "TestASTStubbingSuccess",
+			initialContent: "package main\n\nfunc InitializeContainer() (*FloraContainer, func(), error) {\n\treturn nil, nil, nil\n}",
+			operation: func(dir string) func() error {
+				return func() error { return nil }
+			},
+			wantErr:     false,
+			wantContent: "package main\n\nfunc InitializeContainer() (*FloraContainer, func(), error) {\n\tpanic(\"stub\")\n\n}\n",
 		},
 		{
 			name:           "TestNoPriorFile",
@@ -365,4 +379,3 @@ func TestWithContainerStub(t *testing.T) {
 		})
 	}
 }
-

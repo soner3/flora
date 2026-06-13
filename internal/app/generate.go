@@ -16,8 +16,13 @@ limitations under the License.
 package app
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/printer"
+	"go/token"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -112,8 +117,28 @@ func WithContainerStub(outputDir string, operation func() error) (err error) {
 		}
 	}()
 
-	stub := fmt.Sprintf("//go:build !wireinject\n// +build !wireinject\n\npackage %s\ntype FloraContainer struct{}\nfunc InitializeContainer() (*FloraContainer, func(), error) { return nil, nil, nil }\n", pkgName)
-	_ = os.WriteFile(containerPath, []byte(stub), 0644)
+	fset := token.NewFileSet()
+	f, errParse := parser.ParseFile(fset, containerPath, backupContent, parser.ParseComments)
+	if errParse == nil {
+		for _, decl := range f.Decls {
+			if fn, ok := decl.(*ast.FuncDecl); ok && fn.Body != nil {
+				fn.Body.List = []ast.Stmt{
+					&ast.ExprStmt{
+						X: &ast.CallExpr{
+							Fun:  &ast.Ident{Name: "panic"},
+							Args: []ast.Expr{&ast.BasicLit{Kind: token.STRING, Value: `"stub"`}},
+						},
+					},
+				}
+			}
+		}
+		var buf bytes.Buffer
+		printer.Fprint(&buf, fset, f)
+		_ = os.WriteFile(containerPath, buf.Bytes(), 0644)
+	} else {
+		stub := fmt.Sprintf("//go:build !wireinject\n// +build !wireinject\n\npackage %s\ntype FloraContainer struct{}\nfunc InitializeContainer() (*FloraContainer, func(), error) { return nil, nil, nil }\n", pkgName)
+		_ = os.WriteFile(containerPath, []byte(stub), 0644)
+	}
 
 	err = operation()
 	return err
