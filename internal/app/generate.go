@@ -17,6 +17,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -61,32 +62,60 @@ func RunGenerate(inputDir, outputDir string) error {
 
 	log.Info("Starting flora generation...", "dir", inputDir, "out", outputDir)
 
-	log.Debug("Scanning packages for flora components...")
-	pkgs, err := scanner.ScanPackages(inputDir)
-	if err != nil {
-		return err
-	}
+	return WithContainerStub(outputDir, func() error {
+		log.Debug("Scanning packages for flora components...")
+		pkgs, err := scanner.ScanPackages(inputDir)
+		if err != nil {
+			return err
+		}
 
-	genCtx, err := scanner.ParsePackages(pkgs)
-	if err != nil {
-		return err
-	}
+		genCtx, err := scanner.ParsePackages(pkgs)
+		if err != nil {
+			return err
+		}
 
-	if len(genCtx.Components) == 0 && len(genCtx.SliceBindings) == 0 {
-		log.Warn("No flora components found. Nothing to generate.")
+		if len(genCtx.Components) == 0 && len(genCtx.SliceBindings) == 0 {
+			log.Warn("No flora components found. Nothing to generate.")
+			return nil
+		}
+
+		log.Info("Scan complete", "components_found", len(genCtx.Components), "slice_bindings_found", len(genCtx.SliceBindings))
+
+		log.Debug("Generating DI container...")
+		gen := wiregen.NewWireGenerator()
+		if err := gen.Generate(outputDir, genCtx); err != nil {
+			return err
+		}
+
+		log.Info("Successfully generated flora container!")
 		return nil
-	}
+	})
+}
 
-	log.Info("Scan complete", "components_found", len(genCtx.Components), "slice_bindings_found", len(genCtx.SliceBindings))
+// WithContainerStub backs up flora_container.go, overwrites it with a minimal stub
+// so the AST scan does not fail on stale types, runs operation, and restores the
+// original file if operation returns an error.
+func WithContainerStub(outputDir string, operation func() error) (err error) {
+	absOutDir, _ := filepath.Abs(outputDir)
 
-	log.Debug("Generating DI container...")
-	gen := wiregen.NewWireGenerator()
-	if err := gen.Generate(outputDir, genCtx); err != nil {
-		return err
-	}
+	containerPath := filepath.Join(absOutDir, wiregen.ContainerFileName)
 
-	log.Info("Successfully generated flora container!")
-	return nil
+	pkgName := strings.ReplaceAll(filepath.Base(absOutDir), "-", "_")
+
+	var backupContent []byte
+	backupContent, _ = os.ReadFile(containerPath)
+
+	defer func() {
+		if err != nil && len(backupContent) > 0 {
+			_ = os.WriteFile(containerPath, backupContent, 0644)
+		}
+	}()
+
+	stub := fmt.Sprintf("//go:build !wireinject\n// +build !wireinject\n\npackage %s\ntype FloraContainer struct{}\nfunc InitializeContainer() (*FloraContainer, func(), error) { return nil, nil, nil }\n", pkgName)
+	_ = os.WriteFile(containerPath, []byte(stub), 0644)
+
+	err = operation()
+	return err
 }
 
 // RunWatch starts a file watcher in the specified directory and triggers RunGenerate on changes.

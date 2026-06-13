@@ -14,19 +14,19 @@ func InitializeContainer() (*FloraContainer, func(), error) {
 	c := NewC()
 	string2 := ProvideWrapper_CleanConfig_ProvideDB()
 	cleanService := NewCleanService()
-	iface := ProvideBinding_C_As_Iface(c)
+	iface := ProvideBinding_happy_C_As_Iface(c)
 	consumer := NewConsumer(iface)
 	myRouter := ProvideWrapper_WebConfig_ProvideRouter()
 	server := NewServer(myRouter)
 	floraContainer := &FloraContainer{
-		A:             a,
-		BFactory:      v,
-		C:             c,
-		ProvideDB:     string2,
-		CleanService:  cleanService,
-		Consumer:      consumer,
-		Server:        server,
-		ProvideRouter: myRouter,
+		Happy_A:                      a,
+		Happy_BFactory:               v,
+		Happy_C:                      c,
+		Happy_string_ProvideDB:       string2,
+		Happy_CleanService:           cleanService,
+		Happy_Consumer:               consumer,
+		Happy_Server:                 server,
+		Happy_MyRouter_ProvideRouter: myRouter,
 	}
 	return floraContainer, func() {
 	}, nil
@@ -62,24 +62,26 @@ func ProvideWrapper_WebConfig_ProvideRouter() MyRouter {
 
 }
 
-func ProvideBinding_C_As_Iface(val *C) Iface {
-	return (*C)(val)
+func ProvideBinding_happy_C_As_Iface(val *C) Iface {
+
+	return val
+
 }
 
 type FloraContainer struct {
-	A *A
+	Happy_A *A
 
-	BFactory func() *B
+	Happy_BFactory func() *B
 
-	C *C
+	Happy_C *C
 
-	ProvideDB string
+	Happy_string_ProvideDB string
 
-	CleanService *CleanService
+	Happy_CleanService *CleanService
 
-	Consumer *Consumer
+	Happy_Consumer *Consumer
 
-	Server *Server
+	Happy_Server *Server
 
-	ProvideRouter MyRouter
+	Happy_MyRouter_ProvideRouter MyRouter
 }

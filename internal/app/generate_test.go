@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/soner3/flora/internal/engine/wiregen"
 )
 
 func TestRunGenerate(t *testing.T) {
@@ -74,7 +75,11 @@ func TestRunGenerate(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				defer os.RemoveAll(tmpDir)
+				t.Cleanup(func() {
+					if removeErr := os.RemoveAll(tmpDir); removeErr != nil {
+						t.Logf("warning: failed to clean up temp dir %s: %v", tmpDir, removeErr)
+					}
+				})
 				outDir = tmpDir
 			}
 
@@ -259,8 +264,9 @@ func TestRunWatch_MockedChannels(t *testing.T) {
 
 			errCh := make(chan error, 1)
 
+			outDir := t.TempDir()
 			go func() {
-				errCh <- RunWatch(ctx, ".", ".", t.TempDir())
+				errCh <- RunWatch(ctx, ".", outDir, t.TempDir())
 			}()
 
 			time.Sleep(50 * time.Millisecond)
@@ -278,3 +284,85 @@ func TestRunWatch_MockedChannels(t *testing.T) {
 		})
 	}
 }
+
+
+func TestWithContainerStub(t *testing.T) {
+	containerFile := wiregen.ContainerFileName
+
+	testcases := []struct {
+		name           string
+		initialContent string
+		operation      func(dir string) func() error
+		wantErr        bool
+		wantContent    string
+	}{
+		{
+			name:           "TestSuccessNoRollback",
+			initialContent: "original content",
+			operation: func(dir string) func() error {
+				return func() error {
+					return os.WriteFile(filepath.Join(dir, containerFile), []byte("new generated content"), 0644)
+				}
+			},
+			wantErr:     false,
+			wantContent: "new generated content",
+		},
+		{
+			name:           "TestErrorTriggersRollback",
+			initialContent: "original backup",
+			operation: func(dir string) func() error {
+				return func() error {
+					_ = os.WriteFile(filepath.Join(dir, containerFile), []byte("broken temporary code"), 0644)
+					return errors.New("simulated crash")
+				}
+			},
+			wantErr:     true,
+			wantContent: "original backup",
+		},
+		{
+			name:           "TestNoPriorFile",
+			initialContent: "",
+			operation: func(dir string) func() error {
+				return func() error { return nil }
+			},
+			wantErr:     false,
+			wantContent: "",
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			containerPath := filepath.Join(dir, containerFile)
+
+			if tc.initialContent != "" {
+				if err := os.WriteFile(containerPath, []byte(tc.initialContent), 0644); err != nil {
+					t.Fatalf("failed to write initial container file: %v", err)
+				}
+			}
+
+			err := WithContainerStub(dir, tc.operation(dir))
+
+			if tc.wantErr {
+				if err == nil {
+					t.Error("expected an error, but got nil")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("did not expect an error, but got: %v", err)
+				}
+			}
+
+			if tc.wantContent != "" {
+				got, readErr := os.ReadFile(containerPath)
+				if readErr != nil {
+					t.Fatalf("failed to read container file after operation: %v", readErr)
+				}
+				if string(got) != tc.wantContent {
+					t.Errorf("file content mismatch:\n got:  %q\n want: %q", string(got), tc.wantContent)
+				}
+			}
+		})
+	}
+}
+
