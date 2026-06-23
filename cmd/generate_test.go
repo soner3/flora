@@ -31,22 +31,22 @@ func TestGenerateCmd(t *testing.T) {
 		},
 		{
 			name:        "TestInvalidWatchDirectory",
-			args:        []string{"gen", "-i", "./testdata/generate/happy", "-o", "./testdata/generate/happy", "-w", "-d", "./invalid"},
+			args:        []string{"gen", "-i", "../testdata/cmd/generate/happy", "-o", "../testdata/cmd/generate/happy", "-w", "-d", "./invalid"},
 			expectedOut: "invalid directory provided for flag 'watch-dir':",
 			expErr:      true,
 		},
 		{
 			name:        "TestInvalidWatchDirectoryNotADirectory",
-			args:        []string{"gen", "-i", "./testdata/generate/happy", "-o", "./testdata/generate/happy", "-w", "-d", "./root.go"},
+			args:        []string{"gen", "-i", "../testdata/cmd/generate/happy", "-o", "../testdata/cmd/generate/happy", "-w", "-d", "./root.go"},
 			expectedOut: "invalid path provided for flag 'watch-dir':",
 			expErr:      true,
 		},
 		{
 			name:        "TestRunGenerateSuccess",
-			args:        []string{"gen", "-i", "./testdata/generate/happy", "-o", "./testdata/generate/happy"},
+			args:        []string{"gen", "-i", "../testdata/cmd/generate/happy", "-o", "../testdata/cmd/generate/happy"},
 			expectedOut: "Successfully generated flora container!",
 			cleanup: func() {
-				err := os.Remove("./testdata/generate/happy/flora_container.go")
+				err := os.Remove("../testdata/cmd/generate/happy/flora_container.go")
 				if err != nil && !os.IsNotExist(err) {
 					t.Errorf("expected no error deleting generated file, got %v", err)
 				}

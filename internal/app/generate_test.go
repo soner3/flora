@@ -31,12 +31,13 @@ func TestRunGenerate(t *testing.T) {
 	testcases := []struct {
 		name    string
 		dir     string
+		src     string
 		outDir  string
 		wantErr bool
 	}{
 		{
 			name:    "TestScanError",
-			dir:     "./testdata/scan_err",
+			src:     "package scanerr\n\npackage scanerr2\n\nimport \"fmt\"\nfuc kaputt) {\n\tfmt.Println(\"Syntax error!!!\"\n}\n}",
 			outDir:  t.TempDir(),
 			wantErr: false,
 		},
@@ -48,25 +49,25 @@ func TestRunGenerate(t *testing.T) {
 		},
 		{
 			name:    "TestParseError",
-			dir:     "./testdata/parse_err",
+			src:     "package parseerr\n\nimport \"github.com/soner3/flora\"\n\ntype Bad struct{ flora.Component }\n",
 			outDir:  t.TempDir(),
 			wantErr: true,
 		},
 		{
 			name:    "TestZeroComponents",
-			dir:     "./testdata/empty",
+			src:     "package empty\n\nfunc main() {}\n",
 			outDir:  t.TempDir(),
 			wantErr: false,
 		},
 		{
 			name:    "TestGenerateError",
-			dir:     "./testdata/happy",
+			dir:     "../../testdata/app/happy",
 			outDir:  "invalid\x00path",
 			wantErr: true,
 		},
 		{
 			name:    "TestSuccess",
-			dir:     "./testdata/happy",
+			dir:     "../../testdata/app/happy",
 			outDir:  "",
 			wantErr: false,
 		},
@@ -89,7 +90,11 @@ func TestRunGenerate(t *testing.T) {
 				outDir = tmpDir
 			}
 
-			err := RunGenerate(tc.dir, outDir)
+			dir := tc.dir
+			if tc.src != "" {
+				dir = createTempModule(t, tc.src)
+			}
+			err := RunGenerate(dir, outDir)
 
 			if tc.wantErr {
 				if err == nil {
@@ -118,7 +123,7 @@ func TestRunWatch_Success(t *testing.T) {
 	_ = os.Mkdir(filepath.Join(watchDir, ".hidden_folder"), 0755)
 
 	go func() {
-		errCh <- RunWatch(ctx, "./testdata/happy", outDir, watchDir)
+		errCh <- RunWatch(ctx, "../../testdata/app/happy", outDir, watchDir)
 	}()
 
 	time.Sleep(100 * time.Millisecond)
@@ -145,7 +150,7 @@ func TestRunWatch_Success(t *testing.T) {
 
 func TestRunWatch_InvalidDir(t *testing.T) {
 	ctx := context.Background()
-	err := RunWatch(ctx, "./testdata/happy", t.TempDir(), "invalid\x00path")
+	err := RunWatch(ctx, "../../testdata/app/happy", t.TempDir(), "invalid\x00path")
 	if err == nil {
 		t.Error("Expected an error for invalid watch directory, but got nil")
 	}
@@ -378,4 +383,27 @@ func TestWithContainerStub(t *testing.T) {
 			}
 		})
 	}
+}
+
+func createTempModule(t *testing.T, src string) string {
+	t.Helper()
+	dir := t.TempDir()
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	floraPath := filepath.Dir(filepath.Dir(cwd))
+
+	modContent := "module errtest\n\ngo 1.26.1\n\nrequire github.com/soner3/flora v0.0.0\nreplace github.com/soner3/flora => " + floraPath + "\n"
+
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(modContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(src), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	return dir
 }

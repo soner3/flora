@@ -29,7 +29,7 @@ import (
 func TestGenerate(t *testing.T) {
 
 	loadHappyComponents := func(t *testing.T) *engine.GeneratorContext {
-		packages, err := scanner.ScanPackages("testdata/happy")
+		packages, err := scanner.ScanPackages("../../../testdata/engine/wiregen/happy")
 		if err != nil {
 			t.Fatalf("ScanPackages failed: %v", err)
 		}
@@ -188,7 +188,7 @@ func TestGenerate(t *testing.T) {
 				Components: []*engine.ComponentMetadata{
 					{
 						PackageName:     "happy",
-						PackagePath:     "github.com/soner3/flora/internal/engine/wiregen/testdata/happy",
+						PackagePath:     "github.com/soner3/flora/testdata/engine/wiregen/happy",
 						StructName:      "GhostComponent",
 						ConstructorName: "NewGhostComponent",
 						IsPointer:       true,

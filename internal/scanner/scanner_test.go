@@ -24,24 +24,25 @@ func TestScanPackages(t *testing.T) {
 	testcases := []struct {
 		name     string
 		path     string
+		src      string
 		expected int
 		expErr   error
 	}{
 		{
 			name:     "TestScanPackagesSuccessfulScan",
-			path:     "testdata/happy",
+			path:     "../../testdata/scanner/happy",
 			expected: 1,
 			expErr:   nil,
 		},
 		{
 			name:     "TestScanPackagesFailedScan",
-			path:     "testdata/foo",
+			path:     "../../testdata/foo",
 			expected: 0,
 			expErr:   ErrLoadPackages,
 		},
 		{
 			name:     "TestScanPackagesCompileError",
-			path:     "testdata/sad",
+			src:      "package sad\n\nimport \"github.com/soner3/flora\"\n\ntype BadComponent struct {\n\tflora.Component\n}\n\nvar _ = not_a_function()\n",
 			expected: 1,
 			expErr:   nil,
 		},
@@ -49,7 +50,12 @@ func TestScanPackages(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			packages, err := ScanPackages(tc.path)
+			path := tc.path
+			if tc.src != "" {
+				path = createTempModule(t, tc.src)
+			}
+
+			packages, err := ScanPackages(path)
 
 			if tc.expErr != nil {
 				if err == nil {

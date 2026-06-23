@@ -25,175 +25,481 @@ import (
 
 func TestParsePackages(t *testing.T) {
 	testcases := []struct {
-		name         string
-		testdataPath string
-		expErr       error
+		name   string
+		path   string
+		src    string
+		expErr error
 	}{
 		{
-			name:         "TestParsePackagesSuccessful",
-			testdataPath: "testdata/happy",
-			expErr:       nil,
+			name:   "TestParsePackagesSuccessful",
+			path:   "../../testdata/scanner/happy",
+			expErr: nil,
 		},
 		{
-			name:         "TestParsePackagesMissingProvider",
-			testdataPath: "testdata/err_no_constructor",
-			expErr:       ErrProviderFuncNotFound,
+			name: "TestParsePackagesMissingProvider",
+			src: `package errnoconstructor
+
+import "github.com/soner3/flora"
+
+type Bad struct{ flora.Component }
+`,
+			expErr: ErrProviderFuncNotFound,
 		},
 		{
-			name:         "TestParsePackagesNotAFunc",
-			testdataPath: "testdata/err_not_func",
-			expErr:       ErrInvalidProviderFunc,
+			name: "TestParsePackagesNotAFunc",
+			src: `package errnotfunc
+
+import "github.com/soner3/flora"
+
+type BadComponent struct {
+	flora.Component
+}
+
+var NewBadComponent = "not a function"
+`,
+			expErr: ErrInvalidProviderFunc,
 		},
 		{
-			name:         "TestParsePackagesNoReturn",
-			testdataPath: "testdata/err_no_return",
-			expErr:       ErrInvalidProviderFunc,
+			name: "TestParsePackagesNoReturn",
+			src: `package errnoreturn
+
+import "github.com/soner3/flora"
+
+type Bad struct{ flora.Component }
+
+func NewBad() {}
+`,
+			expErr: ErrInvalidProviderFunc,
 		},
 		{
-			name:         "TestParsePackagesWrongType",
-			testdataPath: "testdata/err_wrong_type",
-			expErr:       ErrInvalidProviderFunc,
+			name: "TestParsePackagesWrongType",
+			src: `package errwrongtype
+
+import "github.com/soner3/flora"
+
+type Bad struct{ flora.Component }
+
+func NewBad() string { return "" }
+`,
+			expErr: ErrInvalidProviderFunc,
 		},
 		{
-			name:         "TestParsePackagesTooManyReturns",
-			testdataPath: "testdata/err_too_many_returns",
-			expErr:       ErrInvalidProviderFunc,
+			name: "TestParsePackagesTooManyReturns",
+			src: `package errtoomanyreturns
+
+import "github.com/soner3/flora"
+
+type Bad struct{ flora.Component }
+
+func NewBad() (*Bad, func(), error, string) { return nil, nil, nil, "" }
+`,
+			expErr: ErrInvalidProviderFunc,
 		},
 		{
-			name:         "TestParsePackagesTwoReturnsWrongSecond",
-			testdataPath: "testdata/err_two_returns_wrong_second",
-			expErr:       ErrInvalidProviderFunc,
+			name: "TestParsePackagesTwoReturnsWrongSecond",
+			src: `package errtworeturnswrongsecond
+
+import "github.com/soner3/flora"
+
+type Bad struct{ flora.Component }
+
+func NewBad() (*Bad, string) { return nil, "" }
+`,
+			expErr: ErrInvalidProviderFunc,
 		},
 		{
-			name:         "TestParsePackagesThreeReturnsWrongSecond",
-			testdataPath: "testdata/err_three_returns_wrong_second",
-			expErr:       ErrInvalidProviderFunc,
+			name: "TestParsePackagesThreeReturnsWrongSecond",
+			src: `package errthreereturnswrongsecond
+
+import "github.com/soner3/flora"
+
+type Bad struct{ flora.Component }
+
+func NewBad() (*Bad, string, error) { return nil, "", nil }
+`,
+			expErr: ErrInvalidProviderFunc,
 		},
 		{
-			name:         "TestParsePackagesThreeReturnsWrongThird",
-			testdataPath: "testdata/err_three_returns_wrong_third",
-			expErr:       ErrInvalidProviderFunc,
+			name: "TestParsePackagesThreeReturnsWrongThird",
+			src: `package errthreereturnswrongthird
+
+import "github.com/soner3/flora"
+
+type Bad struct{ flora.Component }
+
+func NewBad() (*Bad, func(), string) { return nil, nil, "" }
+`,
+			expErr: ErrInvalidProviderFunc,
 		},
 		{
-			name:         "TestParsePackagesNoImplementation",
-			testdataPath: "testdata/err_no_impl",
-			expErr:       ErrNoImplementation,
+			name: "TestParsePackagesNoImplementation",
+			src: `package errnoimpl
+
+import "github.com/soner3/flora"
+
+type Iface interface{ Do() }
+
+type Consumer struct{ flora.Component }
+
+func NewConsumer(i Iface) *Consumer { return nil }
+`,
+			expErr: ErrNoImplementation,
 		},
 		{
-			name:         "TestParsePackagesInterfaceCollisionNoPrimary",
-			testdataPath: "testdata/err_collision_no_primary",
-			expErr:       ErrInterfaceCollision,
+			name: "TestParsePackagesInterfaceCollisionNoPrimary",
+			src: `package errcollisionnoprimary
+
+import "github.com/soner3/flora"
+
+type Greeter interface {
+	Greet()
+}
+type GreeterA struct {
+	flora.Component
+}
+
+func NewGreeterA() *GreeterA { return nil }
+func (g *GreeterA) Greet()   {}
+
+type GreeterB struct {
+	flora.Component
+}
+
+func NewGreeterB() *GreeterB { return nil }
+func (g *GreeterB) Greet()   {}
+
+type Consumer struct {
+	flora.Component
+}
+
+func NewConsumer(g Greeter) *Consumer { return nil }
+`,
+			expErr: ErrInterfaceCollision,
 		},
 		{
-			name:         "TestParsePackagesInterfaceCollisionMultiPrimary",
-			testdataPath: "testdata/err_collision_multi_primary",
-			expErr:       ErrInterfaceCollision,
+			name: "TestParsePackagesInterfaceCollisionMultiPrimary",
+			src: `package errcollisionmultiprimary
+
+import "github.com/soner3/flora"
+
+type Greeter interface {
+	Greet()
+}
+type GreeterA struct {
+	flora.Component ` + "`" + `flora:"primary"` + "`" + `
+}
+
+func NewGreeterA() *GreeterA { return nil }
+func (g *GreeterA) Greet()   {}
+
+type GreeterB struct {
+	flora.Component ` + "`" + `flora:"primary"` + "`" + `
+}
+
+func NewGreeterB() *GreeterB { return nil }
+func (g *GreeterB) Greet()   {}
+
+type Consumer struct {
+	flora.Component
+}
+
+func NewConsumer(g Greeter) *Consumer { return nil }
+`,
+			expErr: ErrInterfaceCollision,
 		},
 		{
-			name:         "TestParsePackagesAnonSlice",
-			testdataPath: "testdata/err_anon_slice",
-			expErr:       ErrInvalidSlice,
+			name: "TestParsePackagesAnonSlice",
+			src: `package erranonslice
+
+import "github.com/soner3/flora"
+
+type Bad struct{ flora.Component }
+
+func NewBad(s []interface{ Do() }) *Bad { return nil }
+`,
+			expErr: ErrInvalidSlice,
 		},
 		{
-			name:         "TestParsePackagesFirstReturnErr",
-			testdataPath: "testdata/err_first_return_err",
-			expErr:       ErrInvalidProviderFunc,
+			name: "TestParsePackagesFirstReturnErr",
+			src: `package errfirstreturnerr
+
+import "github.com/soner3/flora"
+
+type Bad struct{ flora.Component }
+
+func NewBad() error { return nil }
+`,
+			expErr: ErrInvalidProviderFunc,
 		},
 		{
-			name:         "TestParsePackagesSelfReferential",
-			testdataPath: "testdata/err_self_ref",
-			expErr:       ErrInvalidProviderFunc,
+			name: "TestParsePackagesSelfReferential",
+			src: `package errselfref
+
+import "github.com/soner3/flora"
+
+type Bad struct{ flora.Component }
+
+func NewBad(b *Bad) *Bad { return nil }
+`,
+			expErr: ErrInvalidProviderFunc,
 		},
 		{
-			name:         "TestParsePackagesAnonIfaceSingle",
-			testdataPath: "testdata/err_anon_iface_single",
-			expErr:       ErrInvalidInterface,
+			name: "TestParsePackagesAnonIfaceSingle",
+			src: `package erranonifacesingle
+
+import "github.com/soner3/flora"
+
+type Impl struct{ flora.Component }
+
+func NewImpl() *Impl { return nil }
+func (i *Impl) Do()  {}
+
+type Bad struct{ flora.Component }
+
+func NewBad(req interface{ Do() }) *Bad { return nil }
+`,
+			expErr: ErrInvalidInterface,
 		},
 		{
-			name:         "TestParsePackagesAnonIfacePrimary",
-			testdataPath: "testdata/err_anon_iface_primary",
-			expErr:       ErrInvalidInterface,
+			name: "TestParsePackagesAnonIfacePrimary",
+			src: `package erranonifaceprimary
+
+import "github.com/soner3/flora"
+
+type Impl1 struct {
+	flora.Component ` + "`" + `flora:"primary"` + "`" + `
+}
+
+func NewImpl1() *Impl1 { return nil }
+func (i *Impl1) Do()   {}
+
+type Impl2 struct{ flora.Component }
+
+func NewImpl2() *Impl2 { return nil }
+func (i *Impl2) Do()   {}
+
+type Bad struct{ flora.Component }
+
+func NewBad(req interface{ Do() }) *Bad { return nil }
+`,
+			expErr: ErrInvalidInterface,
 		},
 		{
-			name:         "TestParsePackagesInvalidScope",
-			testdataPath: "testdata/err_invalid_scope",
-			expErr:       ErrInvalidMetadata,
+			name: "TestParsePackagesInvalidScope",
+			src: `package errinvalidscope
+
+import "github.com/soner3/flora"
+
+type FakeComponent struct {
+	flora.Component ` + "`" + `flora:"scope=invalid"` + "`" + `
+}
+
+func NewFakeComponent() *FakeComponent {
+	return &FakeComponent{}
+}
+`,
+			expErr: ErrInvalidMetadata,
 		},
 		{
-			name:         "TestParsePackagesPrototypeWithParams",
-			testdataPath: "testdata/err_prototype_param",
-			expErr:       ErrInvalidProviderFunc,
+			name: "TestParsePackagesPrototypeWithParams",
+			src: `package errprototypeparam
+
+import "github.com/soner3/flora"
+
+type Bad struct{ flora.Component }
+
+func NewBad(f func(id int) *Bad) *Bad { return nil }
+`,
+			expErr: ErrInvalidProviderFunc,
 		},
 		{
-			name:         "TestParsePackagesPrototypeInvalidReturn",
-			testdataPath: "testdata/err_prototype_return",
-			expErr:       ErrInvalidProviderFunc,
+			name: "TestParsePackagesPrototypeInvalidReturn",
+			src: `package errprototypereturn
+
+import "github.com/soner3/flora"
+
+type Bad struct{ flora.Component }
+
+func NewBad(f func() (*Bad, string)) *Bad { return nil }
+`,
+			expErr: ErrInvalidProviderFunc,
 		},
 		{
-			name:         "TestParsePackagesInvalidOrder",
-			testdataPath: "testdata/err_invalid_order",
-			expErr:       ErrInvalidMetadata,
+			name: "TestParsePackagesInvalidOrder",
+			src: `package errinvalidorder
+
+import "github.com/soner3/flora"
+
+type BadOrderComponent struct {
+	flora.Component ` + "`" + `flora:"order=one"` + "`" + `
+}
+
+func NewBadOrderComponent() *BadOrderComponent {
+	return &BadOrderComponent{}
+}
+`,
+			expErr: ErrInvalidMetadata,
 		},
 		{
-			name:         "TestParsePackagesConfigInvalidScope",
-			testdataPath: "testdata/err_config_scope",
-			expErr:       ErrInvalidMetadata,
+			name: "TestParsePackagesConfigInvalidScope",
+			src: `package errconfigscope
+
+import "github.com/soner3/flora"
+
+type BadConfig struct {
+	flora.Configuration
+}
+
+// flora:scope=super_singleton
+func (c *BadConfig) ProvideFloat() float32 {
+	return 1.0
+}
+`,
+			expErr: ErrInvalidMetadata,
 		},
 		{
-			name:         "TestParsePackagesUnexportedPrefix",
-			testdataPath: "testdata/err_unexported_prefix",
-			expErr:       ErrInvalidMetadata,
+			name: "TestParsePackagesUnexportedPrefix",
+			src: `package errunexportedprefix
+
+import "github.com/soner3/flora"
+
+type MyComponent struct {
+	flora.Component ` + "`" + `flora:"constructor=badConstructor"` + "`" + `
+}
+
+func badConstructor() *MyComponent { return nil }
+`,
+			expErr: ErrInvalidMetadata,
 		},
 		{
-			name:         "TestParsePackagesUnexportedPositional",
-			testdataPath: "testdata/err_unexported_pos",
-			expErr:       ErrInvalidMetadata,
+			name: "TestParsePackagesUnexportedPositional",
+			src: `package errunexportedpos
+
+import "github.com/soner3/flora"
+
+type MyComponent struct {
+	flora.Component ` + "`" + `flora:"badConstructor"` + "`" + `
+}
+
+func badConstructor() *MyComponent { return nil }
+`,
+			expErr: ErrInvalidMetadata,
 		},
 		{
-			name:         "TestParsePackagesErrConfigProvider",
-			testdataPath: "testdata/err_config_provider",
-			expErr:       ErrInvalidProviderFunc,
+			name: "TestParsePackagesErrConfigProvider",
+			src: `package errconfigprovider
+
+import "github.com/soner3/flora"
+
+type BadConfig struct {
+	flora.Configuration
+}
+
+func (c *BadConfig) ProvideInvalid() error {
+	return nil
+}
+`,
+			expErr: ErrInvalidProviderFunc,
 		},
 		{
-			name:         "TestParsePackagesHappyConfig",
-			testdataPath: "testdata/happy",
-			expErr:       nil,
+			name:   "TestParsePackagesHappyConfig",
+			path:   "../../testdata/scanner/happy",
+			expErr: nil,
 		},
 		{
-			name:         "TestParsePackagesErrQualifierNotFound",
-			testdataPath: "testdata/err_qualifier_not_found",
-			expErr:       ErrInvalidMetadata,
+			name: "TestParsePackagesErrQualifierNotFound",
+			src: `package errqualifiernotfound
+
+import "github.com/soner3/flora"
+
+type MyService struct {
+	flora.Component ` + "`" + `flora:"inject(db=doesNotExist)"` + "`" + `
+}
+
+func NewMyService(db string) *MyService { return nil }
+`,
+			expErr: ErrInvalidMetadata,
 		},
 		{
-			name:         "TestParsePackagesErrInjectUnknownParam",
-			testdataPath: "testdata/err_inject_unknown_param",
-			expErr:       ErrInvalidMetadata,
+			name: "TestParsePackagesErrInjectUnknownParam",
+			src: `package errinjectunknownparam
+
+import "github.com/soner3/flora"
+
+type MyService struct {
+	flora.Component ` + "`" + `flora:"inject(wrongParamName=masterDB)"` + "`" + `
+}
+
+func NewMyService(db string) *MyService { return nil }
+`,
+			expErr: ErrInvalidMetadata,
 		},
 		{
-			name:         "TestParsePackagesErrSliceAny",
-			testdataPath: "testdata/err_slice_any",
-			expErr:       ErrInvalidSlice,
+			name: "TestParsePackagesErrSliceAny",
+			src: `package errsliceany
+
+import "github.com/soner3/flora"
+
+type Bad struct{ flora.Component }
+
+func NewBad(s []any) *Bad { return nil }
+`,
+			expErr: ErrInvalidSlice,
 		},
 		{
-			name:         "TestParsePackagesHappySlicePtr",
-			testdataPath: "testdata/happy_slice_ptr",
-			expErr:       nil,
+			name:   "TestParsePackagesHappySlicePtr",
+			path:   "../../testdata/scanner/happy_slice_ptr",
+			expErr: nil,
 		},
 		{
-			name:         "TestParsePackagesErrQualifierCollisionType",
-			testdataPath: "testdata/err_qualifier_collision_type",
-			expErr:       ErrInvalidMetadata,
+			name: "TestParsePackagesErrQualifierCollisionType",
+			src: `package errqualifiercollisiontype
+
+import "github.com/soner3/flora"
+
+type A struct {
+	flora.Component ` + "`" + `flora:"name=myQual"` + "`" + `
+}
+
+func NewA() *A { return nil }
+
+type B struct {
+	flora.Component ` + "`" + `flora:"name=myQual"` + "`" + `
+}
+
+func NewB() *B { return nil }
+`,
+			expErr: ErrInvalidMetadata,
 		},
 		{
-			name:         "TestParsePackagesErrInjectTypeMismatch",
-			testdataPath: "testdata/err_inject_type_mismatch",
-			expErr:       ErrInvalidMetadata,
+			name: "TestParsePackagesErrInjectTypeMismatch",
+			src: `package errinjecttypemismatch
+
+import "github.com/soner3/flora"
+
+type DB struct {
+	flora.Component ` + "`" + `flora:"name=myDB"` + "`" + `
+}
+
+func NewDB() *DB { return nil }
+
+type Consumer struct {
+	flora.Component ` + "`" + `flora:"inject(dep=myDB)"` + "`" + `
+}
+
+func NewConsumer(dep string) *Consumer { return nil }
+`,
+			expErr: ErrInvalidMetadata,
 		},
 	}
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			packages, err := ScanPackages(tc.testdataPath)
+			path := tc.path
+			if tc.src != "" {
+				path = createTempModule(t, tc.src)
+			}
+			packages, err := ScanPackages(path)
 			if err != nil {
 				t.Fatalf("ScanPackages failed: %v", err)
 			}
